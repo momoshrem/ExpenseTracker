@@ -17,10 +17,10 @@
         .hidden { display: none !important; }
     </style>
 </head>
-<body class="text-gray-100 min-h-screen font-sans antialiased pb-16">
+<body class="text-gray-100 min-h-screen font-sans antialiased pb-24 relative">
 
     <!-- DASHBOARD HEADER -->
-    <header class="border-b border-gray-800 bg-[#040d14] sticky top-0 z-50 backdrop-blur-md bg-opacity-80">
+    <header class="border-b border-gray-800 bg-[#040d14] sticky top-0 z-40 backdrop-blur-md bg-opacity-80">
         <div class="max-w-4xl mx-auto px-4 py-6 flex flex-col sm:flex-row justify-between items-center gap-4">
             <div>
                 <h1 class="text-sm font-semibold tracking-wider text-gray-400 uppercase">Monthly Expenses</h1>
@@ -41,51 +41,52 @@
     </header>
 
     <!-- CONTENT BODY -->
-    <main class="max-w-4xl mx-auto px-4 mt-8 space-y-8">
+    <main class="max-w-4xl mx-auto px-4 mt-6 space-y-6">
         
-        <!-- Top Row: Input and Visual Chart -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <div class="space-y-6">
-                <!-- Log Expense Form -->
-                <section class="card-dark p-6 rounded-2xl shadow-xl">
-                    <h2 class="text-lg font-bold mb-4 text-white">Log Expense</h2>
-                    <form id="expense-form" class="space-y-4">
+        <!-- Top Row: Visual Chart (Prioritizes top visual space on mobile viewports) -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
+            
+            <!-- Desktop Only Form Block / Hidden completely on Mobile viewports -->
+            <div class="hidden md:block md:col-span-1 space-y-6">
+                <section class="card-dark p-5 rounded-2xl shadow-xl">
+                    <h2 class="text-base font-bold mb-4 text-white">Log Expense</h2>
+                    <form id="desktop-expense-form" class="space-y-4">
                         <div>
                             <label class="block text-xs font-medium text-gray-400 mb-1">Description / Item</label>
-                            <input type="text" id="expense-desc" required placeholder="e.g., Electric bill, Rent, Groceries" class="w-full bg-[#172a32] border border-gray-700 rounded-xl px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:border-[#00c805] text-sm">
+                            <input type="text" id="d-expense-desc" required placeholder="e.g., Electric bill, Rent" class="w-full bg-[#172a32] border border-gray-700 rounded-xl px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-[#00c805] text-sm">
                         </div>
                         <div>
                             <label class="block text-xs font-medium text-gray-400 mb-1">Amount ($)</label>
-                            <input type="number" id="expense-amount" required step="0.01" min="0.01" placeholder="0.00" class="w-full bg-[#172a32] border border-gray-700 rounded-xl px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:border-[#00c805] text-sm">
+                            <input type="number" id="d-expense-amount" required step="0.01" min="0.01" placeholder="0.00" class="w-full bg-[#172a32] border border-gray-700 rounded-xl px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-[#00c805] text-sm">
                         </div>
                         <div>
                             <label class="block text-xs font-medium text-gray-400 mb-1">Notes <span class="text-gray-500">(Optional)</span></label>
-                            <input type="text" id="expense-note" placeholder="e.g., Confirmation #4920, Due by 15th" class="w-full bg-[#172a32] border border-gray-700 rounded-xl px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:border-[#00c805] text-sm">
+                            <input type="text" id="d-expense-note" placeholder="e.g., Confirmation code" class="w-full bg-[#172a32] border border-gray-700 rounded-xl px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-[#00c805] text-sm">
                         </div>
-                        <button type="submit" class="w-full robinhood-bg-green text-[#040d14] font-bold py-3 rounded-xl transition duration-150 text-sm tracking-wide mt-2">Add Expense</button>
+                        <button type="submit" class="w-full robinhood-bg-green text-[#040d14] font-bold py-2.5 rounded-xl transition duration-150 text-sm tracking-wide mt-2">Add Expense</button>
                     </form>
                 </section>
             </div>
 
-            <!-- Visualization Wheel Column -->
-            <div class="space-y-6">
-                <section class="card-dark p-6 rounded-2xl shadow-xl flex flex-col items-center justify-center min-h-[320px]">
-                    <div class="w-full max-w-[240px] relative">
+            <!-- Visualization Wheel Column (Always sits on top when opened on mobile devices) -->
+            <div class="col-span-1 md:col-span-2 space-y-6">
+                <section class="card-dark p-6 rounded-2xl shadow-xl flex flex-col sm:flex-row items-center justify-center gap-6 min-h-[220px]">
+                    <div class="w-full max-w-[180px] relative flex-shrink-0">
                         <canvas id="expense-chart"></canvas>
                     </div>
-                    <div id="chart-fallback" class="text-sm text-gray-500 text-center mt-4">No data logged yet.</div>
+                    <div id="chart-fallback" class="text-sm text-gray-500 text-center py-8 hidden w-full">No data logged yet.</div>
                     
-                    <!-- Simple Clean Inline Legend Container -->
-                    <div id="chart-legend" class="w-full mt-6 grid grid-cols-2 gap-2 text-xs text-gray-400 max-h-[120px] overflow-y-auto pr-1"></div>
+                    <!-- Clean Inline Legend Container -->
+                    <div id="chart-legend" class="w-full grid grid-cols-2 gap-2 text-xs text-gray-400 max-h-[150px] overflow-y-auto pr-1"></div>
                 </section>
             </div>
         </div>
 
         <!-- Bottom Row: Sorted Expense List -->
         <section class="card-dark p-6 rounded-2xl shadow-xl">
-            <h2 class="text-lg font-bold mb-4 text-white flex items-center justify-between">
+            <h2 class="text-base font-bold mb-4 text-white flex items-center justify-between">
                 <span>Itemized Breakdown</span>
-                <span class="text-xs font-normal text-gray-400 tracking-wide">Click amount or note to edit • Auto Cloud Synced</span>
+                <span class="text-[10px] sm:text-xs font-normal text-gray-400 tracking-wide">Tap amount or note to edit</span>
             </h2>
             
             <div id="list-fallback" class="text-sm text-gray-500 text-center py-6">No items registered this month.</div>
@@ -95,8 +96,45 @@
 
     </main>
 
+    <!-- FLOATING ACTION BUTTON (Mobile Only "+") -->
+    <button id="mobile-fab" class="md:hidden fixed bottom-6 right-6 w-14 h-14 robinhood-bg-green text-[#040d14] rounded-full flex items-center justify-center shadow-2xl transition active:scale-95 z-50">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4" />
+        </svg>
+    </button>
+
+    <!-- MOBILE MODAL BOTTOM SHEET OVERLAY -->
+    <div id="modal-overlay" class="fixed inset-0 bg-black/60 backdrop-blur-sm opacity-0 pointer-events-none transition-opacity duration-300 z-50 flex items-end sm:items-center sm:justify-center">
+        <div id="modal-container" class="w-full sm:max-w-md bg-[#0e1e24] border-t sm:border border-gray-800 rounded-t-3xl sm:rounded-2xl p-6 shadow-2xl transform translate-y-full sm:translate-y-4 transition-transform duration-300 max-h-[90vh] overflow-y-auto">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-bold text-white">Log Expense</h3>
+                <button id="close-modal-btn" class="p-1 text-gray-400 hover:text-white transition">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            
+            <form id="mobile-expense-form" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-medium text-gray-400 mb-1">Description / Item</label>
+                    <input type="text" id="m-expense-desc" required placeholder="e.g., Electric bill, Rent, Groceries" class="w-full bg-[#172a32] border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-[#00c805] text-sm">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-400 mb-1">Amount ($)</label>
+                    <input type="number" id="m-expense-amount" required step="0.01" min="0.01" placeholder="0.00" class="w-full bg-[#172a32] border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-[#00c805] text-sm">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-400 mb-1">Notes <span class="text-gray-500">(Optional)</span></label>
+                    <input type="text" id="m-expense-note" placeholder="e.g., Confirmation #4920, Due by 15th" class="w-full bg-[#172a32] border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-[#00c805] text-sm">
+                </div>
+                <button type="submit" class="w-full robinhood-bg-green text-[#040d14] font-bold py-3.5 rounded-xl transition duration-150 text-sm tracking-wide mt-2">Add Expense</button>
+            </form>
+        </div>
+    </div>
+
     <script type="module">
-        // High-reliability API baseline that works beautifully across hosted domains
+        // Standard high-reliability data stream API engine
         const CLOUD_API_BASE = 'https://api.restful-api.dev/objects';
 
         // State Core Engine
@@ -106,7 +144,6 @@
 
         const dynamicColors = ['#00c805', '#ff5000', '#ffb700', '#0094ff', '#9d4edd', '#e63946', '#00f5d4', '#ff007f'];
 
-        const expenseForm = document.getElementById('expense-form');
         const totalAmountDisplay = document.getElementById('total-amount');
         const chartLegend = document.getElementById('chart-legend');
         const expenseListContainer = document.getElementById('expense-list-container');
@@ -114,6 +151,14 @@
         const syncKeyInput = document.getElementById('sync-key-input');
         const connectBtn = document.getElementById('connect-btn');
         const showKeyBtn = document.getElementById('show-key-btn');
+
+        // Modal Elements
+        const mobileFab = document.getElementById('mobile-fab');
+        const modalOverlay = document.getElementById('modal-overlay');
+        const modalContainer = document.getElementById('modal-container');
+        const closeModalBtn = document.getElementById('close-modal-btn');
+        const mobileForm = document.getElementById('mobile-expense-form');
+        const desktopForm = document.getElementById('desktop-expense-form');
 
         // Launch Application Frame
         initCloudSession();
@@ -125,12 +170,12 @@
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
-                            name: "Tiiny Monthly Expense Bucket",
+                            name: "GitHub Pages Expense Bucket",
                             data: { expenses: expenses }
                         })
                     });
                     
-                    if (!res.ok) throw new Error("Sync engine dropped connection packet");
+                    if (!res.ok) throw new Error("Sync engine connection failed");
                     
                     const responseData = await res.json();
                     if (responseData && responseData.id) {
@@ -145,22 +190,56 @@
             }
             updateAppUI();
             
-            // Background polling loop configured to 10 seconds to align remote view states
             if (syncKey) setInterval(pullFromCloud, 10000);
         }
 
-        // Handle Log Submissions
-        expenseForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const desc = document.getElementById('expense-desc').value.trim();
-            const amount = parseFloat(document.getElementById('expense-amount').value);
-            const note = document.getElementById('expense-note').value.trim();
+        // Modal Control Toggle Logic
+        function openModal() {
+            modalOverlay.classList.remove('pointer-events-none');
+            modalOverlay.classList.add('opacity-100');
+            modalContainer.classList.remove('translate-y-full', 'sm:translate-y-4');
+            modalContainer.classList.add('translate-y-0');
+        }
 
+        function closeModal() {
+            modalOverlay.classList.add('pointer-events-none');
+            modalOverlay.classList.remove('opacity-100');
+            modalContainer.classList.remove('translate-y-0');
+            modalContainer.classList.add('translate-y-full', 'sm:translate-y-4');
+        }
+
+        mobileFab.addEventListener('click', openModal);
+        closeModalBtn.addEventListener('click', closeModal);
+        modalOverlay.addEventListener('click', (e) => {
+            if (e.target === modalOverlay) closeModal();
+        });
+
+        // Universal Expense Submission Processor
+        async function processNewExpense(desc, amount, note) {
             expenses.push({ id: Date.now(), desc, amount, note });
-            
-            expenseForm.reset();
             updateAppUI();
             await pushToCloud();
+            closeModal();
+        }
+
+        // Mobile Form Submission
+        mobileForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const desc = document.getElementById('m-expense-desc').value.trim();
+            const amount = parseFloat(document.getElementById('m-expense-amount').value);
+            const note = document.getElementById('m-expense-note').value.trim();
+            mobileForm.reset();
+            await processNewExpense(desc, amount, note);
+        });
+
+        // Desktop Form Submission
+        desktopForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const desc = document.getElementById('d-expense-desc').value.trim();
+            const amount = parseFloat(document.getElementById('d-expense-amount').value);
+            const note = document.getElementById('d-expense-note').value.trim();
+            desktopForm.reset();
+            await processNewExpense(desc, amount, note);
         });
 
         // Sync Linking Module
@@ -191,7 +270,7 @@
         });
 
         showKeyBtn.addEventListener('click', () => {
-            if (!syncKey) return alert("Cloud engine is initializing or blocked by local script extensions.");
+            if (!syncKey) return alert("Cloud engine is initializing or blocked.");
             prompt("Copy this Sync Key and paste it into your secondary device to match profiles:", syncKey);
         });
 
@@ -236,7 +315,7 @@
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        name: "Tiiny Monthly Expense Bucket",
+                        name: "GitHub Pages Expense Bucket",
                         data: { expenses: expenses }
                     })
                 });
@@ -338,7 +417,6 @@
             }
         }
 
-        // Sanitization safety helper
         function escapeHtml(str) {
             if (!str) return '';
             return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
