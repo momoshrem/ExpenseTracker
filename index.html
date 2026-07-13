@@ -58,13 +58,8 @@
 
         <!-- ITEMIZATION FEED PANEL (Right Side) -->
         <aside class="w-full lg:w-[460px] flex flex-col h-[50vh] lg:h-full bg-[#0b171c] border-t lg:border-t-0 border-gray-900">
-            <div class="px-6 py-4 border-b border-gray-900 flex items-center justify-between bg-[#0e1e24] lg:bg-transparent">
-                <h3 class="text-sm font-semibold tracking-wide text-gray-400">Transaction Stream</h3>
-                <span class="text-[11px] bg-[#172a32] text-gray-400 px-2 py-0.5 rounded-md font-medium tracking-wider">Sorted by scale</span>
-            </div>
-            
-            <!-- Dynamic Scroll Container -->
-            <div class="flex-1 overflow-y-auto no-scrollbar p-4 space-y-2">
+            <!-- Dynamic Scroll Container with adjusted spacing now that header is removed -->
+            <div class="flex-1 overflow-y-auto no-scrollbar p-6 space-y-2">
                 <div id="list-fallback" class="py-12 text-center text-gray-600 text-sm hidden">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 mx-auto mb-2 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
                     No outlays mapped yet.
@@ -117,6 +112,9 @@
         let chartInstance = null;
         const dynamicColors = ['#00c805', '#ff5000', '#ffb700', '#0094ff', '#9d4edd', '#e63946', '#00f5d4', '#ff007f'];
 
+        // Local Cross-Tab Sync Channel
+        const localSyncChannel = new BroadcastChannel('streamline_local_sync');
+
         const totalAmountDisplay = document.getElementById('total-amount');
         const chartLegend = document.getElementById('chart-legend');
         const expenseListContainer = document.getElementById('expense-list-container');
@@ -137,8 +135,18 @@
             setSyncStatus('syncing', 'Syncing...');
             await pullFromCloud();
             updateAppUI();
+            
+            // Long-poll fallback interval for cross-device updates
             setInterval(pullFromCloud, 5000);
         }
+
+        // Listen for updates from other open browser tabs locally
+        localSyncChannel.onmessage = (event) => {
+            if (event.data && Array.isArray(event.data)) {
+                expenses = event.data;
+                updateAppUI();
+            }
+        };
 
         function setSyncStatus(state, message) {
             syncText.textContent = message;
@@ -176,6 +184,10 @@
             
             expenses.push({ id: Date.now(), desc, amount, note });
             updateAppUI();
+            
+            // Broadcast changes to other local tabs instantly
+            localSyncChannel.postMessage(expenses);
+            
             await pushToCloud();
             closeModal();
         });
@@ -183,6 +195,7 @@
         window.deleteExpense = async function(id) {
             expenses = expenses.filter(exp => exp.id !== id);
             updateAppUI();
+            localSyncChannel.postMessage(expenses);
             await pushToCloud();
         }
 
@@ -196,6 +209,7 @@
             if (target.amount !== parsed) {
                 target.amount = parsed;
                 updateAppUI();
+                localSyncChannel.postMessage(expenses);
                 await pushToCloud();
             } else {
                 element.textContent = '$' + target.amount.toLocaleString('en-US', { minimumFractionDigits: 2 });
@@ -209,6 +223,7 @@
             if (target.note !== newNote) {
                 target.note = newNote;
                 updateAppUI();
+                localSyncChannel.postMessage(expenses);
                 await pushToCloud();
             }
         }
@@ -230,6 +245,8 @@
                     if (Array.isArray(cloudData) && JSON.stringify(expenses) !== JSON.stringify(cloudData)) {
                         expenses = cloudData;
                         updateAppUI();
+                        // Sync any open background tabs on this device as well
+                        localSyncChannel.postMessage(expenses);
                     }
                     setSyncStatus('success', 'Live Synced');
                 }
