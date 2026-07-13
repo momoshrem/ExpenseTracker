@@ -15,10 +15,11 @@
 </head>
 <body class="h-full font-sans antialiased text-gray-200 selection:bg-emerald-500 selection:text-black">
 
-    <div class="flex h-full flex-col lg:flex-row max-w-7xl mx-auto overflow-hidden bg-[#0e1e24]">
+    <!-- Changed outer container on mobile to flex-col with independent scrolling sections so components do not squash each other -->
+    <div class="flex h-full flex-col lg:flex-row max-w-7xl mx-auto overflow-y-auto lg:overflow-hidden bg-[#0e1e24]">
         
         <!-- MAIN ANALYTICS PANEL (Left Side) -->
-        <main class="flex-1 flex flex-col justify-start overflow-y-auto no-scrollbar p-6 lg:p-8 lg:border-r lg:border-gray-900">
+        <main class="w-full lg:flex-1 flex flex-col justify-start p-6 lg:p-8 lg:border-r lg:border-gray-900 lg:overflow-y-auto no-scrollbar">
             <!-- Header Status Area -->
             <header class="flex items-center justify-between mb-8">
                 <div>
@@ -37,10 +38,11 @@
             </header>
 
             <!-- Visualization Node -->
-            <section class="bg-[#12242c] rounded-2xl border border-gray-900 p-6 shadow-xl mb-6">
+            <section class="bg-[#12242c] rounded-2xl border border-gray-900 p-6 shadow-xl mb-4">
                 <h2 class="text-sm font-semibold text-gray-400 mb-6 tracking-wide">Expense Weights</h2>
                 <div class="flex flex-col md:flex-row gap-8 items-center justify-center">
-                    <div class="relative w-48 h-48 flex-shrink-0 flex items-center justify-center">
+                    <!-- Adjusted responsive canvas dimensions to guarantee the container preserves its scale ratio -->
+                    <div class="relative w-40 h-40 sm:w-48 sm:h-48 flex-shrink-0 flex items-center justify-center">
                         <!-- Fallback when data is empty -->
                         <div id="chart-fallback" class="absolute inset-0 flex flex-col items-center justify-center text-center p-4 bg-[#172a32] rounded-full border border-dashed border-gray-750">
                             <span class="text-xs text-gray-500">Awaiting allocations</span>
@@ -57,9 +59,10 @@
         </main>
 
         <!-- ITEMIZATION FEED PANEL (Right Side) -->
-        <aside class="w-full lg:w-[460px] flex flex-col h-[50vh] lg:h-full bg-[#0b171c] border-t lg:border-t-0 border-gray-900">
-            <!-- Dynamic Scroll Container with adjusted spacing now that header is removed -->
-            <div class="flex-1 overflow-y-auto no-scrollbar p-6 space-y-2">
+        <!-- Fixed layout compression: removed mobile h-[50vh] forcing a dynamic document block on mobile screens -->
+        <aside class="w-full lg:w-[460px] flex flex-col bg-[#0b171c] border-t lg:border-t-0 border-gray-900 lg:h-full">
+            <!-- Dynamic Scroll Container -->
+            <div class="flex-1 lg:overflow-y-auto no-scrollbar p-6 space-y-2">
                 <div id="list-fallback" class="py-12 text-center text-gray-600 text-sm hidden">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 mx-auto mb-2 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
                     No outlays mapped yet.
@@ -71,7 +74,7 @@
         </aside>
     </div>
 
-    <!-- GLOBAL FLOATING ACTION BUTTON (FAB) - Visible on all viewports -->
+    <!-- GLOBAL FLOATING ACTION BUTTON (FAB) -->
     <button id="global-fab" class="fixed bottom-6 right-6 z-40 bg-[#00c805] hover:bg-emerald-500 text-black p-4 rounded-full shadow-2xl transition-all duration-150 transform active:scale-95 hover:scale-105 flex items-center justify-center">
         <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4" /></svg>
     </button>
@@ -112,7 +115,6 @@
         let chartInstance = null;
         const dynamicColors = ['#00c805', '#ff5000', '#ffb700', '#0094ff', '#9d4edd', '#e63946', '#00f5d4', '#ff007f'];
 
-        // Local Cross-Tab Sync Channel
         const localSyncChannel = new BroadcastChannel('streamline_local_sync');
 
         const totalAmountDisplay = document.getElementById('total-amount');
@@ -135,12 +137,9 @@
             setSyncStatus('syncing', 'Syncing...');
             await pullFromCloud();
             updateAppUI();
-            
-            // Long-poll fallback interval for cross-device updates
             setInterval(pullFromCloud, 5000);
         }
 
-        // Listen for updates from other open browser tabs locally
         localSyncChannel.onmessage = (event) => {
             if (event.data && Array.isArray(event.data)) {
                 expenses = event.data;
@@ -181,13 +180,9 @@
             const note = document.getElementById('expense-note').value.trim();
             
             globalForm.reset();
-            
             expenses.push({ id: Date.now(), desc, amount, note });
             updateAppUI();
-            
-            // Broadcast changes to other local tabs instantly
             localSyncChannel.postMessage(expenses);
-            
             await pushToCloud();
             closeModal();
         });
@@ -245,7 +240,6 @@
                     if (Array.isArray(cloudData) && JSON.stringify(expenses) !== JSON.stringify(cloudData)) {
                         expenses = cloudData;
                         updateAppUI();
-                        // Sync any open background tabs on this device as well
                         localSyncChannel.postMessage(expenses);
                     }
                     setSyncStatus('success', 'Live Synced');
@@ -260,7 +254,6 @@
             totalAmountDisplay.textContent = total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
             
             const sortedExpenses = [...expenses].sort((a, b) => b.amount - a.amount);
-            
             updateChart(sortedExpenses, total);
             renderSortedList(sortedExpenses);
         }
