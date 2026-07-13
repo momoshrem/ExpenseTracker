@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cloud Expense Tracker</title>
+    <title>Shared Expense Tracker</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
@@ -23,9 +23,9 @@
                 <h1 class="text-sm font-semibold tracking-wider text-gray-400 uppercase">Monthly Expenses</h1>
                 <div class="text-4xl font-bold tracking-tight mt-1">$<span id="total-amount">0.00</span></div>
             </div>
-            <div class="text-xs text-gray-500 bg-gray-900/50 px-3 py-1.5 rounded-lg border border-gray-800 flex items-center gap-1.5">
-                <span class="w-2 h-2 rounded-full bg-[#00c805] animate-pulse"></span>
-                Cloud Active
+            <div id="sync-badge" class="text-xs text-gray-500 bg-gray-900/50 px-3 py-1.5 rounded-lg border border-gray-800 flex items-center gap-1.5">
+                <span id="sync-dot" class="w-2 h-2 rounded-full bg-yellow-500 animate-pulse"></span>
+                <span id="sync-text">Connecting...</span>
             </div>
         </div>
     </header>
@@ -72,21 +72,21 @@
         <section class="card-dark p-6 rounded-2xl shadow-xl">
             <h2 class="text-base font-bold mb-4 text-white flex items-center justify-between">
                 <span>Itemized Breakdown</span>
-                <span class="text-xs font-normal text-gray-400">Tap to edit inline</span>
+                <span class="text-xs font-normal text-gray-400">Tap values or notes to edit inline</span>
             </h2>
             <div id="list-fallback" class="text-sm text-gray-500 text-center py-6">No items registered this month.</div>
             <div id="expense-list-container" class="divide-y divide-gray-800 hidden"></div>
         </section>
     </main>
 
-    <!-- UNIVERSAL FLOATING PLUS BUTTON (Visible on all devices for quick logging) -->
+    <!-- FLOATING PLUS BUTTON -->
     <button id="global-fab" class="fixed bottom-6 right-6 w-14 h-14 robinhood-bg-green text-[#040d14] rounded-full flex items-center justify-center shadow-2xl z-50 transition transform active:scale-95 hover:scale-105">
         <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M12 4v16m8-8H4" />
         </svg>
     </button>
 
-    <!-- SLIDE-UP BOTTOM MODAL DRAWER -->
+    <!-- DRAWER MODAL -->
     <div id="modal-overlay" class="fixed inset-0 bg-black/70 backdrop-blur-sm opacity-0 pointer-events-none transition-opacity duration-200 z-50 flex items-end sm:items-center sm:justify-center px-0 sm:px-4">
         <div id="modal-container" class="w-full sm:max-w-md bg-[#0e1e24] border-t sm:border border-gray-800 rounded-t-3xl sm:rounded-2xl p-6 shadow-2xl transform translate-y-full sm:translate-y-4 transition-transform duration-200 pb-10 sm:pb-6">
             <div class="flex items-center justify-between mb-5">
@@ -114,11 +114,9 @@
     </div>
 
     <script type="module">
-        // TYPE YOUR PASSWORD BETWEEN THE SINGLE QUOTES BELOW (Numbers and letters only):
-        const CUSTOM_SYNC_PASSWORD = 'Mo03expensetracker'; 
-
-        // --- CORE APPLICATION ARCHITECTURE ---
-        const CLOUD_API_URL = `https://kvdb.io/66qM6863G9L2D6e9fN4XU9/${CUSTOM_SYNC_PASSWORD}`;
+        // PERMANENT HARDCODED SYNC PATHWAY
+        const CLOUD_API_URL = 'https://kvdb.io/66qM6863G9L2D6e9fN4XU9/shared_expense_stream_v3';
+        
         let expenses = JSON.parse(localStorage.getItem('ro_pure_local_expenses')) || [];
         let chartInstance = null;
         const dynamicColors = ['#00c805', '#ff5000', '#ffb700', '#0094ff', '#9d4edd', '#e63946', '#00f5d4', '#ff007f'];
@@ -134,16 +132,29 @@
         const closeModalBtn = document.getElementById('close-modal-btn');
         const mobileForm = document.getElementById('mobile-expense-form');
         const desktopForm = document.getElementById('desktop-expense-form');
+        
+        const syncDot = document.getElementById('sync-dot');
+        const syncText = document.getElementById('sync-text');
 
         initCloudSession();
 
         async function initCloudSession() {
+            setSyncStatus('syncing', 'Syncing...');
             await pullFromCloud();
             updateAppUI();
-            setInterval(pullFromCloud, 7000);
+            
+            // Background polling loop runs every 5 seconds to match updates between devices
+            setInterval(pullFromCloud, 5000);
         }
 
-        // Display Modal UI Animation Control
+        function setSyncStatus(state, message) {
+            syncText.textContent = message;
+            syncDot.className = "w-2 h-2 rounded-full animate-pulse ";
+            if (state === 'success') syncDot.classList.add('bg-[#00c805]');
+            else if (state === 'syncing') syncDot.classList.add('bg-yellow-500');
+            else syncDot.className = "w-2 h-2 rounded-full bg-red-500";
+        }
+
         function openModal() {
             modalOverlay.classList.remove('pointer-events-none');
             modalOverlay.classList.add('opacity-100');
@@ -221,9 +232,12 @@
         }
 
         async function pushToCloud() {
+            setSyncStatus('syncing', 'Updating Cloud...');
             try {
-                await fetch(CLOUD_API_URL, { method: 'POST', body: JSON.stringify(expenses) });
-            } catch (e) { console.error("Cloud push failed", e); }
+                const res = await fetch(CLOUD_API_URL, { method: 'POST', body: JSON.stringify(expenses) });
+                if (res.ok) setSyncStatus('success', 'Live Synced');
+                else setSyncStatus('error', 'Sync Failed');
+            } catch (e) { setSyncStatus('error', 'Network Error'); }
         }
 
         async function pullFromCloud() {
@@ -235,8 +249,9 @@
                         expenses = cloudData;
                         updateAppUI();
                     }
+                    setSyncStatus('success', 'Live Synced');
                 }
-            } catch (e) { console.error("Cloud pull failed", e); }
+            } catch (e) { console.error("Pull failure", e); }
         }
 
         function updateAppUI() {
@@ -255,7 +270,7 @@
                 return;
             }
             listFallback.classList.add('hidden');
-            expenseListContainer.classList.remove('hidden');
+            expenseListContainer.className = "divide-y divide-gray-800";
 
             const sorted = [...expenses].sort((a, b) => b.amount - a.amount);
             expenseListContainer.innerHTML = sorted.map(item => {
