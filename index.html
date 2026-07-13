@@ -17,69 +17,46 @@
 
     <div class="flex h-full flex-col lg:flex-row max-w-7xl mx-auto overflow-hidden bg-[#0e1e24]">
         
-        <!-- MAIN ANALYTICS PANEL (Left Side Layout) -->
-        <main class="flex-1 flex flex-col justify-between overflow-y-auto no-scrollbar p-6 lg:p-8 lg:border-r lg:border-gray-900">
-            <div>
-                <!-- Header Status Area -->
-                <header class="flex items-center justify-between mb-8">
-                    <div>
-                        <h1 class="text-xs uppercase tracking-widest text-gray-500 font-bold">Total Portfolio Outflow</h1>
-                        <div class="flex items-baseline gap-1 mt-1 text-white">
-                            <span class="text-2xl font-light text-gray-400">$</span>
-                            <span id="total-amount" class="text-5xl font-semibold tracking-tight">0.00</span>
+        <!-- MAIN ANALYTICS PANEL (Left Side) -->
+        <main class="flex-1 flex flex-col justify-start overflow-y-auto no-scrollbar p-6 lg:p-8 lg:border-r lg:border-gray-900">
+            <!-- Header Status Area -->
+            <header class="flex items-center justify-between mb-8">
+                <div>
+                    <h1 class="text-xs uppercase tracking-widest text-gray-500 font-bold">Total Portfolio Outflow</h1>
+                    <div class="flex items-baseline gap-1 mt-1 text-white">
+                        <span class="text-2xl font-light text-gray-400">$</span>
+                        <span id="total-amount" class="text-5xl font-semibold tracking-tight">0.00</span>
+                    </div>
+                </div>
+                
+                <!-- Sync State Badge -->
+                <div class="flex items-center gap-2 bg-[#172a32] px-3 py-1.5 rounded-full border border-gray-800">
+                    <span id="sync-dot" class="w-2 h-2 rounded-full bg-yellow-500 animate-pulse"></span>
+                    <span id="sync-text" class="text-xs font-medium text-gray-400 font-mono">Initializing...</span>
+                </div>
+            </header>
+
+            <!-- Visualization Node -->
+            <section class="bg-[#12242c] rounded-2xl border border-gray-900 p-6 shadow-xl mb-6">
+                <h2 class="text-sm font-semibold text-gray-400 mb-6 tracking-wide">Expense Weights</h2>
+                <div class="flex flex-col md:flex-row gap-8 items-center justify-center">
+                    <div class="relative w-48 h-48 flex-shrink-0 flex items-center justify-center">
+                        <!-- Fallback when data is empty -->
+                        <div id="chart-fallback" class="absolute inset-0 flex flex-col items-center justify-center text-center p-4 bg-[#172a32] rounded-full border border-dashed border-gray-750">
+                            <span class="text-xs text-gray-500">Awaiting allocations</span>
                         </div>
+                        <canvas id="expense-chart" class="w-full h-full hidden"></canvas>
                     </div>
                     
-                    <!-- Sync State Badge -->
-                    <div class="flex items-center gap-2 bg-[#172a32] px-3 py-1.5 rounded-full border border-gray-800">
-                        <span id="sync-dot" class="w-2 h-2 rounded-full bg-yellow-500 animate-pulse"></span>
-                        <span id="sync-text" class="text-xs font-medium text-gray-400 font-mono">Initializing...</span>
+                    <!-- Mini Legend Container -->
+                    <div id="chart-legend" class="flex-1 grid grid-cols-2 gap-x-4 gap-y-2.5 text-xs w-full max-w-sm md:max-w-none">
+                        <!-- Dynamic Content insertion -->
                     </div>
-                </header>
-
-                <!-- Visualization Node -->
-                <section class="bg-[#12242c] rounded-2xl border border-gray-900 p-6 shadow-xl mb-6">
-                    <h2 class="text-sm font-semibold text-gray-400 mb-6 tracking-wide">Expense Weights</h2>
-                    <div class="flex flex-col md:flex-row gap-8 items-center justify-center">
-                        <div class="relative w-48 h-48 flex-shrink-0 flex items-center justify-center">
-                            <!-- Fallback when data is empty -->
-                            <div id="chart-fallback" class="absolute inset-0 flex flex-col items-center justify-center text-center p-4 bg-[#172a32] rounded-full border border-dashed border-gray-750">
-                                <span class="text-xs text-gray-500">Awaiting allocations</span>
-                            </div>
-                            <canvas id="expense-chart" class="w-full h-full hidden"></canvas>
-                        </div>
-                        
-                        <!-- Mini Legend Container -->
-                        <div id="chart-legend" class="flex-1 grid grid-cols-2 gap-x-4 gap-y-2.5 text-xs w-full max-w-sm md:max-w-none">
-                            <!-- Dynamic Content insertion -->
-                        </div>
-                    </div>
-                </section>
-            </div>
-
-            <!-- Desktop Input Stream (Hidden on Mobile) -->
-            <footer class="hidden lg:block bg-[#12242c] p-5 rounded-2xl border border-gray-900 shadow-lg mt-auto">
-                <form id="desktop-expense-form" class="flex items-end gap-3">
-                    <div class="flex-1 min-w-0">
-                        <label class="block text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-1.5 pl-1">Description</label>
-                        <input type="text" id="d-expense-desc" required placeholder="e.g., AWS Cloud Infra" class="w-full bg-[#172a32] border border-gray-800 rounded-xl px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-emerald-500 transition-colors">
-                    </div>
-                    <div class="w-32 flex-shrink-0">
-                        <label class="block text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-1.5 pl-1">Amount ($)</label>
-                        <input type="number" step="0.01" min="0.01" id="d-expense-amount" required placeholder="0.00" class="w-full bg-[#172a32] border border-gray-800 rounded-xl px-3 py-2 text-sm font-mono text-white placeholder-gray-600 focus:outline-none focus:border-emerald-500 transition-colors">
-                    </div>
-                    <div class="flex-[1.5] min-w-0">
-                        <label class="block text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-1.5 pl-1">Internal Note (Optional)</label>
-                        <input type="text" id="d-expense-note" placeholder="Project tag, recurring timeline..." class="w-full bg-[#172a32] border border-gray-800 rounded-xl px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-emerald-500 transition-colors">
-                    </div>
-                    <button type="submit" class="bg-[#00c805] hover:bg-emerald-500 text-black font-semibold text-sm px-5 py-2 rounded-xl h-[38px] transition-all duration-150 transform active:scale-[0.98]">
-                        Execute
-                    </button>
-                </form>
-            </footer>
+                </div>
+            </section>
         </main>
 
-        <!-- ITEMIZATION FEED PANEL (Right Side Panel Layout) -->
+        <!-- ITEMIZATION FEED PANEL (Right Side) -->
         <aside class="w-full lg:w-[460px] flex flex-col h-[50vh] lg:h-full bg-[#0b171c] border-t lg:border-t-0 border-gray-900">
             <div class="px-6 py-4 border-b border-gray-900 flex items-center justify-between bg-[#0e1e24] lg:bg-transparent">
                 <h3 class="text-sm font-semibold tracking-wide text-gray-400">Transaction Stream</h3>
@@ -99,12 +76,12 @@
         </aside>
     </div>
 
-    <!-- MOBILE FLOATING ACTION BUTTON (FAB) -->
-    <button id="global-fab" class="lg:hidden fixed bottom-6 right-6 z-40 bg-[#00c805] hover:bg-emerald-500 text-black p-4 rounded-full shadow-2xl transition-transform duration-150 transform active:scale-95">
+    <!-- GLOBAL FLOATING ACTION BUTTON (FAB) - Visible on all viewports -->
+    <button id="global-fab" class="fixed bottom-6 right-6 z-40 bg-[#00c805] hover:bg-emerald-500 text-black p-4 rounded-full shadow-2xl transition-all duration-150 transform active:scale-95 hover:scale-105 flex items-center justify-center">
         <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4" /></svg>
     </button>
 
-    <!-- MOBILE SYSTEM SLIDE DRAWER / MODAL -->
+    <!-- UNIFIED ACTION MODAL SLIDE DRAWER -->
     <div id="modal-overlay" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 pointer-events-none opacity-0 transition-opacity duration-200 flex items-end sm:items-center sm:justify-center p-0 sm:p-4">
         <div id="modal-container" class="w-full sm:max-w-md bg-[#12242c] border border-gray-900 rounded-t-3xl sm:rounded-2xl shadow-2xl p-6 transition-transform duration-200 transform translate-y-full sm:translate-y-4">
             <div class="flex items-center justify-between mb-5">
@@ -112,18 +89,18 @@
                 <button id="close-modal-btn" class="text-gray-500 hover:text-white p-1"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg></button>
             </div>
             
-            <form id="mobile-expense-form" class="space-y-4">
+            <form id="global-expense-form" class="space-y-4">
                 <div>
                     <label class="block text-xs font-semibold text-gray-400 mb-1">Description</label>
-                    <input type="text" id="m-expense-desc" required placeholder="e.g., Subscriptions, Utilities" class="w-full bg-[#172a32] border border-gray-800 rounded-xl px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-emerald-500">
+                    <input type="text" id="expense-desc" required placeholder="e.g., AWS Cloud Infra, Subscriptions" class="w-full bg-[#172a32] border border-gray-800 rounded-xl px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-emerald-500">
                 </div>
                 <div>
                     <label class="block text-xs font-semibold text-gray-400 mb-1">Amount ($)</label>
-                    <input type="number" step="0.01" min="0.01" id="m-expense-amount" required placeholder="0.00" class="w-full bg-[#172a32] border border-gray-800 rounded-xl px-3 py-2.5 text-sm font-mono text-white placeholder-gray-600 focus:outline-none focus:border-emerald-500">
+                    <input type="number" step="0.01" min="0.01" id="expense-amount" required placeholder="0.00" class="w-full bg-[#172a32] border border-gray-800 rounded-xl px-3 py-2.5 text-sm font-mono text-white placeholder-gray-600 focus:outline-none focus:border-emerald-500">
                 </div>
                 <div>
                     <label class="block text-xs font-semibold text-gray-400 mb-1">Internal Note</label>
-                    <input type="text" id="m-expense-note" placeholder="Optional context..." class="w-full bg-[#172a32] border border-gray-800 rounded-xl px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-emerald-500">
+                    <input type="text" id="expense-note" placeholder="Optional context..." class="w-full bg-[#172a32] border border-gray-800 rounded-xl px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-emerald-500">
                 </div>
                 <button type="submit" class="w-full bg-[#00c805] hover:bg-emerald-500 text-black font-semibold text-sm py-3 rounded-xl mt-2 transition-colors">
                     Commit Entry
@@ -149,8 +126,7 @@
         const modalOverlay = document.getElementById('modal-overlay');
         const modalContainer = document.getElementById('modal-container');
         const closeModalBtn = document.getElementById('close-modal-btn');
-        const mobileForm = document.getElementById('mobile-expense-form');
-        const desktopForm = document.getElementById('desktop-expense-form');
+        const globalForm = document.getElementById('global-expense-form');
         
         const syncDot = document.getElementById('sync-dot');
         const syncText = document.getElementById('sync-text');
@@ -190,29 +166,18 @@
         closeModalBtn.addEventListener('click', closeModal);
         modalOverlay.addEventListener('click', (e) => { if (e.target === modalOverlay) closeModal(); });
 
-        async function processNewExpense(desc, amount, note) {
+        globalForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const desc = document.getElementById('expense-desc').value.trim();
+            const amount = parseFloat(document.getElementById('expense-amount').value);
+            const note = document.getElementById('expense-note').value.trim();
+            
+            globalForm.reset();
+            
             expenses.push({ id: Date.now(), desc, amount, note });
             updateAppUI();
             await pushToCloud();
             closeModal();
-        }
-
-        mobileForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const desc = document.getElementById('m-expense-desc').value.trim();
-            const amount = parseFloat(document.getElementById('m-expense-amount').value);
-            const note = document.getElementById('m-expense-note').value.trim();
-            mobileForm.reset();
-            await processNewExpense(desc, amount, note);
-        });
-
-        desktopForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const desc = document.getElementById('d-expense-desc').value.trim();
-            const amount = parseFloat(document.getElementById('d-expense-amount').value);
-            const note = document.getElementById('d-expense-note').value.trim();
-            desktopForm.reset();
-            await processNewExpense(desc, amount, note);
         });
 
         window.deleteExpense = async function(id) {
