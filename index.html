@@ -15,7 +15,6 @@
 </head>
 <body class="h-full font-sans antialiased text-gray-200 selection:bg-emerald-500 selection:text-black">
 
-    <!-- Changed outer container on mobile to flex-col with independent scrolling sections so components do not squash each other -->
     <div class="flex h-full flex-col lg:flex-row max-w-7xl mx-auto overflow-y-auto lg:overflow-hidden bg-[#0e1e24]">
         
         <!-- MAIN ANALYTICS PANEL (Left Side) -->
@@ -23,7 +22,8 @@
             <!-- Header Status Area -->
             <header class="flex items-center justify-between mb-8">
                 <div>
-                    <h1 class="text-xs uppercase tracking-widest text-gray-500 font-bold">Total Portfolio Outflow</h1>
+                    <!-- Updated header text to Total Monthly Expenses -->
+                    <h1 class="text-xs uppercase tracking-widest text-gray-500 font-bold">Total Monthly Expenses</h1>
                     <div class="flex items-baseline gap-1 mt-1 text-white">
                         <span class="text-2xl font-light text-gray-400">$</span>
                         <span id="total-amount" class="text-5xl font-semibold tracking-tight">0.00</span>
@@ -41,7 +41,6 @@
             <section class="bg-[#12242c] rounded-2xl border border-gray-900 p-6 shadow-xl mb-4">
                 <h2 class="text-sm font-semibold text-gray-400 mb-6 tracking-wide">Expense Weights</h2>
                 <div class="flex flex-col md:flex-row gap-8 items-center justify-center">
-                    <!-- Adjusted responsive canvas dimensions to guarantee the container preserves its scale ratio -->
                     <div class="relative w-40 h-40 sm:w-48 sm:h-48 flex-shrink-0 flex items-center justify-center">
                         <!-- Fallback when data is empty -->
                         <div id="chart-fallback" class="absolute inset-0 flex flex-col items-center justify-center text-center p-4 bg-[#172a32] rounded-full border border-dashed border-gray-750">
@@ -59,9 +58,7 @@
         </main>
 
         <!-- ITEMIZATION FEED PANEL (Right Side) -->
-        <!-- Fixed layout compression: removed mobile h-[50vh] forcing a dynamic document block on mobile screens -->
         <aside class="w-full lg:w-[460px] flex flex-col bg-[#0b171c] border-t lg:border-t-0 border-gray-900 lg:h-full">
-            <!-- Dynamic Scroll Container -->
             <div class="flex-1 lg:overflow-y-auto no-scrollbar p-6 space-y-2">
                 <div id="list-fallback" class="py-12 text-center text-gray-600 text-sm hidden">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 mx-auto mb-2 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
@@ -109,7 +106,7 @@
 
     <!-- CORE RE-SYNCHRONIZED JAVA ENGINE MODULE -->
     <script type="module">
-        const CLOUD_API_URL = 'https://kvdb.io/66qM6863G9L2D6e9fN4XU9/shared_expense_stream_v3';
+        const CLOUD_API_URL = 'https://keyvalue.immanual.workers.dev/api/streamline_expenses_v3';
         
         let expenses = JSON.parse(localStorage.getItem('ro_pure_local_expenses')) || [];
         let chartInstance = null;
@@ -137,7 +134,7 @@
             setSyncStatus('syncing', 'Syncing...');
             await pullFromCloud();
             updateAppUI();
-            setInterval(pullFromCloud, 5000);
+            setInterval(pullFromCloud, 6000);
         }
 
         localSyncChannel.onmessage = (event) => {
@@ -226,7 +223,11 @@
         async function pushToCloud() {
             setSyncStatus('syncing', 'Updating Cloud...');
             try {
-                const res = await fetch(CLOUD_API_URL, { method: 'POST', body: JSON.stringify(expenses) });
+                const res = await fetch(CLOUD_API_URL, { 
+                    method: 'POST', 
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(expenses) 
+                });
                 if (res.ok) setSyncStatus('success', 'Live Synced');
                 else setSyncStatus('error', 'Sync Failed');
             } catch (e) { setSyncStatus('error', 'Network Error'); }
@@ -243,8 +244,13 @@
                         localSyncChannel.postMessage(expenses);
                     }
                     setSyncStatus('success', 'Live Synced');
+                } else {
+                    setSyncStatus('error', 'Sync Out');
                 }
-            } catch (e) { console.error("Pull failure", e); }
+            } catch (e) { 
+                console.error("Pull failure", e); 
+                setSyncStatus('error', 'Disconnected');
+            }
         }
 
         function updateAppUI() {
