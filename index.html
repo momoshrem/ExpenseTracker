@@ -250,8 +250,16 @@
                         updateAppUI();
                     }
                     setSyncStatus('success', 'Live Synced');
+                } else if (res.status === 404) {
+                    // Catching the blank DB state: consider it healthy, clear the spinner
+                    setSyncStatus('success', 'Live Synced (Ready)');
+                } else {
+                    setSyncStatus('error', 'Sync Error');
                 }
-            } catch (e) { console.error("Pull failure", e); }
+            } catch (e) { 
+                console.error("Pull failure", e); 
+                setSyncStatus('error', 'Network Timeout');
+            }
         }
 
         function updateAppUI() {
@@ -335,5 +343,3 @@
             return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
         }
     </script>
-</body>
-</html>
