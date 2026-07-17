@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-[#0e1e24]">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ExpenseTracker</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body class="h-full font-sans antialiased text-gray-200 selection:bg-emerald-500 selection:text-black">
+
+    <div id="app-scroll-container" class="flex h-full flex-col lg:flex-row max-w-7xl mx-auto overflow-y-auto lg:overflow-hidden bg-[#0e1e24]">
+        
+        <!-- MAIN ANALYTICS PANEL (Left Side) -->
+        <main id="main-scroll-container" class="w-full lg:flex-1 flex flex-col justify-start p-6 lg:p-8 lg:border-r lg:border-gray-900 lg:overflow-y-auto no-scrollbar">
+            <!-- Header Status Area -->
+            <header class="flex items-center justify-between mb-8">
+                <div>
+                    <h1 class="text-xs uppercase tracking-widest text-gray-500 font-bold">Total Monthly Expenses</h1>
+                    <div class="flex items-baseline gap-1 mt-1 text-white">
+                        <span class="text-2xl font-light text-gray-400">$</span>
+                        <span id="total-amount" class="text-5xl font-semibold tracking-tight">0.00</span>
+                    </div>
+                </div>
+                
+                <!-- Sync State Badge -->
+                <div class="flex flex-col items-end gap-2">
+                    <button id="sync-badge" class="flex items-center gap-2 bg-[#172a32] px-3 py-1.5 rounded-full border border-gray-800 hover:border-gray-700 transition">
+                        <span id="sync-dot" class="w-2 h-2 rounded-full bg-yellow-500 animate-pulse"></span>
+                        <span id="sync-text" class="text-xs font-medium text-gray-400 font-mono">Initializing...</span>
+                    </button>
+                    <button id="settings-trigger" class="text-[11px] text-gray-500 hover:text-gray-300 underline underline-offset-2">GitHub sync settings</button>
+                </div>
+            </header>
+
+            <!-- Visualization Node -->
+            <section class="bg-[#12242c] rounded-2xl border border-gray-900 p-6 shadow-xl mb-4">
+                <h2 class="text-sm font-semibold text-gray-400 mb-6 tracking-wide">Expense Wheel</h2>
+                <div class="flex flex-col md:flex-row gap-8 items-center justify-center">
+                    <div class="relative w-40 h-40 sm:w-48 sm:h-48 flex-shrink-0 flex items-center justify-center">
+                        <div id="chart-fallback" class="absolute inset-0 flex flex-col items-center justify-center text-center p-4 bg-[#172a32] rounded-full border border-dashed border-gray-750">
+                            <span class="text-xs text-gray-500">Awaiting allocations</span>
+                        </div>
+                        <canvas id="expense-chart" class="w-full h-full hidden"></canvas>
+                    </div>
+                    <div id="chart-legend" class="flex-1 grid grid-cols-2 gap-x-4 gap-y-2.5 text-xs w-full max-w-sm md:max-w-none"></div>
+                </div>
+            </section>
+        </main>
+
+        <!-- ITEMIZATION FEED PANEL (Right Side) -->
+        <aside class="w-full lg:w-[460px] flex flex-col bg-[#0b171c] border-t lg:border-t-0 border-gray-900 lg:h-full">
+            <div id="aside-scroll-container" class="flex-1 lg:overflow-y-auto no-scrollbar p-6 space-y-2">
+                <div id="maaser-pinned-container"></div>
+                <div id="list-fallback" class="py-12 text-center text-gray-600 text-sm hidden">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 mx-auto mb-2 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
+                    No expenses mapped yet.
+                </div>
+                <div id="expense-list-container"></div>
+            </div>
+        </aside>
+    </div>
+
+    <!-- GLOBAL FLOATING ACTION BUTTONS -->
+    <div id="fab-stack" class="fixed bottom-6 right-6 z-40 flex flex-col items-center gap-3 transition-all duration-300 ease-out">
+        <button id="global-fab" class="bg-[#00c805] hover:bg-emerald-500 text-black p-4 rounded-full shadow-2xl transition-all duration-150 transform active:scale-95 hover:scale-105 flex items-center justify-center">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4" /></svg>
+        </button>
+    </div>
+
+    <!-- ADD EXPENSE MODAL -->
+    <div id="modal-overlay" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 pointer-events-none opacity-0 transition-opacity duration-200 flex items-end sm:items-center sm:justify-center p-0 sm:p-4">
+        <div id="modal-container" class="w-full sm:max-w-md bg-[#12242c] border border-gray-900 rounded-t-3xl sm:rounded-2xl shadow-2xl p-6 transition-transform duration-200 transform translate-y-full sm:translate-y-4">
+            <div class="flex items-center justify-between mb-5">
+                <h3 class="text-base font-semibold text-white">Add Expense</h3>
+                <button class="close-modal-btn text-gray-500 hover:text-white p-1" data-target="modal-overlay"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg></button>
+            </div>
+            <form id="global-expense-form" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-gray-400 mb-1">Description</label>
+                    <input type="text" id="expense-desc" required placeholder="e.g., Subscriptions" class="w-full bg-[#172a32] border border-gray-800 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-400 mb-1">Amount ($)</label>
+                    <input type="number" step="0.01" min="0.01" id="expense-amount" required placeholder="0.00" class="w-full bg-[#172a32] border border-gray-800 rounded-xl px-3 py-2.5 text-sm font-mono text-white focus:outline-none focus:border-emerald-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-400 mb-1">Internal Note</label>
+                    <input type="text" id="expense-note" placeholder="Optional context..." class="w-full bg-[#172a32] border border-gray-800 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500">
+                </div>
+                <button type="submit" class="w-full bg-[#00c805] hover:bg-emerald-500 text-black font-semibold text-sm py-3 rounded-xl mt-2 transition-colors">Add Expense</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- VIEW & EDIT EXPENSE MODAL -->
+    <div id="view-modal-overlay" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 pointer-events-none opacity-0 transition-opacity duration-200 flex items-end sm:items-center sm:justify-center p-0 sm:p-4">
+        <div id="view-modal-container" class="w-full sm:max-w-md bg-[#12242c] border border-gray-900 rounded-t-3xl sm:rounded-2xl shadow-2xl p-6 transition-transform duration-200 transform translate-y-full sm:translate-y-4">
+            <div class="flex items-center justify-between mb-5">
+                <h3 class="text-base font-semibold text-white">Expense Details</h3>
+                <button class="close-modal-btn text-gray-500 hover:text-white p-1" data-target="view-modal-overlay"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg></button>
+            </div>
+            <form id="view-expense-form" class="space-y-4">
+                <input type="hidden" id="edit-expense-id">
+                <div>
+                    <label class="block text-xs font-semibold text-gray-400 mb-1">Description</label>
+                    <input type="text" id="edit-expense-desc" required class="w-full bg-[#172a32] border border-gray-800 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-400 mb-1">Amount ($)</label>
+                    <input type="number" step="0.01" min="0.01" id="edit-expense-amount" required class="w-full bg-[#172a32] border border-gray-800 rounded-xl px-3 py-2.5 text-sm font-mono text-white focus:outline-none focus:border-emerald-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-400 mb-1">Note Details</label>
+                    <textarea id="edit-expense-note" rows="4" class="w-full bg-[#172a32] border border-gray-800 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500 resize-none"></textarea>
+                </div>
+                <div class="flex gap-3">
+                    <button id="delete-view-btn" type="button" class="flex-1 bg-red-950/40 hover:bg-red-900/60 border border-red-900 text-red-200 font-semibold text-sm py-3 rounded-xl transition-colors">Delete Expense</button>
+                    <button type="submit" class="flex-1 bg-[#00c805] hover:bg-emerald-500 text-black font-semibold text-sm py-3 rounded-xl transition-colors">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- GITHUB SETTINGS MODAL -->
+    <div id="settings-overlay" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 pointer-events-none opacity-0 transition-opacity duration-200 flex items-end sm:items-center sm:justify-center p-0 sm:p-4">
+        <div id="settings-container" class="w-full sm:max-w-md bg-[#12242c] border border-gray-900 rounded-t-3xl sm:rounded-2xl shadow-2xl p-6 transition-transform duration-200 transform translate-y-full sm:translate-y-4">
+            <div class="flex items-center justify-between mb-3">
+                <h3 class="text-base font-semibold text-white">GitHub Sync</h3>
+                <button class="close-modal-btn text-gray-500 hover:text-white p-1" data-target="settings-overlay"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg></button>
+            </div>
+            <p class="text-xs text-gray-500 mb-4 leading-relaxed">
+                Expenses sync through a private Gist on your own GitHub account. Create a token with the <span class="text-gray-300">gist</span> scope.
+            </p>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-gray-400 mb-1">Personal access token</label>
+                    <input type="password" id="gh-token" class="w-full bg-[#172a32] border border-gray-800 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-400 mb-1">Gist ID <span class="text-gray-600 font-normal">(blank for new)</span></label>
+                    <div class="flex gap-2">
+                        <input type="text" id="gh-gist-id" class="flex-1 bg-[#172a32] border border-gray-800 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500">
+                        <button id="copy-gist-id" type="button" class="px-3 text-xs text-gray-400 hover:text-gray-200 bg-[#172a32] border border-gray-800 rounded-xl">Copy</button>
+                    </div>
+                </div>
+                <p id="gh-settings-status" class="text-xs min-h-[1em]"></p>
+                <button id="gh-connect-btn" class="w-full bg-[#00c805] hover:bg-emerald-500 text-black font-semibold text-sm py-3 rounded-xl transition-colors">Save &amp; Connect</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAASER MODAL -->
+    <div id="maaser-modal-overlay" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 pointer-events-none opacity-0 transition-opacity duration-200 flex items-end sm:items-center sm:justify-center p-0 sm:p-4">
+        <div id="maaser-modal-container" class="w-full sm:max-w-md max-h-[85vh] flex flex-col bg-[#12242c] border border-gray-900 rounded-t-3xl sm:rounded-2xl shadow-2xl p-6 transition-transform duration-200 transform translate-y-full sm:translate-y-4">
+            <div class="flex items-center justify-between mb-5 flex-shrink-0">
+                <h3 class="text-base font-semibold text-white">Maaser</h3>
+                <button class="close-modal-btn text-gray-500 hover:text-white p-1" data-target="maaser-modal-overlay"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg></button>
+            </div>
+            <div class="mb-5 bg-[#0b171c] border border-gray-800 rounded-2xl p-4 flex flex-col gap-2">
+                <label class="block text-xs font-semibold text-gray-400 mb-1">Adjust Expense Value</label>
+                <div class="flex gap-2 items-center">
+                    <input type="number" step="0.01" min="0.01" id="maaser-delta-input" class="flex-1 bg-[#172a32] border border-gray-800 rounded-xl px-3 py-2.5 text-sm font-mono text-white focus:outline-none focus:border-emerald-500">
+                    <button id="maaser-add-btn" class="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-black rounded-xl text-sm font-bold min-w-[44px]">+</button>
+                    <button id="maaser-sub-btn" class="px-4 py-2.5 bg-red-600 hover:bg-red-500 text-white rounded-xl text-sm font-bold min-w-[44px]">-</button>
+                </div>
+            </div>
+            <form id="maaser-form" class="space-y-4 flex-shrink-0">
+                <div>
+                    <label class="block text-xs font-semibold text-gray-400 mb-1">Set Value Directly ($)</label>
+                    <input type="number" step="0.01" min="0" id="maaser-amount-input" required class="w-full bg-[#172a32] border border-gray-800 rounded-xl px-3 py-2.5 text-sm font-mono text-white focus:outline-none focus:border-emerald-500">
+                </div>
+                <button type="submit" class="w-full bg-[#00c805] hover:bg-emerald-500 text-black font-semibold text-sm py-3 rounded-xl transition-colors">Save Amount</button>
+            </form>
+            <div class="mt-6 pt-4 border-t border-gray-800 flex-1 overflow-y-auto no-scrollbar">
+                <h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Change History</h4>
+                <div id="maaser-history-list" class="space-y-2 text-sm"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ============================
+        // CONFIG & CONSTANTS
+        // ============================
+        const GIST_FILE_NAME = 'streamline-data.json';
+        const DYNAMIC_COLORS = ['#00c805', '#ff5000', '#ffb700', '#0094ff', '#9d4edd', '#e63946', '#00f5d4', '#ff007f'];
+        const localSyncChannel = new BroadcastChannel('streamline_local_sync');
+        let chartInstance = null;
+        let syncInterval = null;
+
+        // ============================
+        // STATE
+        // ============================
+        let ghSettings = JSON.parse(localStorage.getItem('streamline_gh_settings')) || { token: '', gistId: '' };
+        let expenses = JSON.parse(localStorage.getItem('ro_pure_local_expenses')) || [];
+        let maaser = JSON.parse(localStorage.getItem('ro_pure_local_maaser')) || { amount: 0, history: [] };
+
+        // ============================
+        // DOM ELEMENTS
+        // ============================
+        const els = {
+            totalAmount: document.getElementById('total-amount'),
+            expenseList: document.getElementById('expense-list-container'),
+            listFallback: document.getElementById('list-fallback'),
+            chartLegend: document.getElementById('chart-legend'),
+            chartCanvas: document.getElementById('expense-chart'),
+            chartFallback: document.getElementById('chart-fallback'),
+            maaserPinned: document.getElementById('maaser-pinned-container'),
+            syncDot: document.getElementById('sync-dot'),
+            syncText: document.getElementById('sync-text'),
+            maaserHistory: document.getElementById('maaser-history-list')
+        };
+
+        // ============================
+        // UTILITIES
+        // ============================
+        const escapeHtml = (str) => {
+            if (!str) return '';
+            return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+        };
+
+        const calcRound = (n) => Math.round((n + Number.EPSILON) * 1e8) / 1e8;
+
+        const setSyncStatus = (state, message) => {
+            els.syncText.textContent = message;
+            els.syncDot.className = "w-2 h-2 rounded-full animate-pulse ";
+            if (state === 'success') els.syncDot.classList.add('bg-[#00c805]');
+            else if (state === 'syncing') els.syncDot.classList.add('bg-yellow-500');
+            else els.syncDot.className = "w-2 h-2 rounded-full bg-red-500";
+        };
+
+        // Core save function to replace repeated code
+        async function commitChanges() {
+            updateAppUI();
+            localSyncChannel.postMessage({ expenses, maaser });
+            await pushToCloud();
+        }
+
+        // ============================
+        // MODAL MANAGEMENT
+        // ============================
+        function toggleModal(modalId, show) {
+            const overlay = document.getElementById(modalId);
+            const container = overlay.firstElementChild;
+            if (show) {
+                overlay.classList.remove('pointer-events-none', 'opacity-0');
+                container.classList.remove('translate-y-full', 'sm:translate-y-4');
+            } else {
+                overlay.classList.add('pointer-events-none', 'opacity-0');
+                container.classList.add('translate-y-full', 'sm:translate-y-4');
+            }
+        }
+
+        // ============================
+        // GITHUB SYNC
+        // ============================
+        async function pushToCloud() {
+            if (!ghSettings.token || !ghSettings.gistId) return setSyncStatus('error', 'Not connected');
+            setSyncStatus('syncing', 'Updating GitHub...');
+            try {
+                const res = await fetch(`https://api.github.com/gists/${ghSettings.gistId}`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Accept': 'application/vnd.github+json',
+                        'Authorization': `token ${ghSettings.token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ files: { [GIST_FILE_NAME]: { content: JSON.stringify({ expenses, maaser }, null, 2) } } })
+                });
+                res.ok ? setSyncStatus('success', 'Live Synced') : setSyncStatus('error', 'Sync Failed');
+            } catch (e) { setSyncStatus('error', 'Network Error'); }
+        }
+
+        async function pullFromCloud() {
+            if (!ghSettings.token || !ghSettings.gistId || document.hidden) return; // Smart polling: skip if tab hidden
+            try {
+                const res = await fetch(`https://api.github.com/gists/${ghSettings.gistId}`, {
+                    headers: { 'Accept': 'application/vnd.github+json', 'Authorization': `token ${ghSettings.token}` }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    const file = data.files && data.files[GIST_FILE_NAME];
+                    if (!file) return setSyncStatus('error', 'Data Missing');
+                    
+                    let content = file.truncated ? await (await fetch(file.raw_url)).text() : file.content;
+                    const cloudData = JSON.parse(content || '[]');
+                    
+                    const remoteExpenses = Array.isArray(cloudData.expenses) ? cloudData.expenses : [];
+                    const remoteMaaser = (cloudData.maaser && typeof cloudData.maaser === 'object') ? cloudData.maaser : { amount: 0, history: [] };
+                    
+                    // Simple fast check before triggering re-render
+                    if (JSON.stringify(expenses) !== JSON.stringify(remoteExpenses) || JSON.stringify(maaser) !== JSON.stringify(remoteMaaser)) {
+                        expenses = remoteExpenses;
+                        maaser = remoteMaaser;
+                        updateAppUI();
+                        localSyncChannel.postMessage({ expenses, maaser });
+                    }
+                    setSyncStatus('success', 'Live Synced');
+                } else {
+                    setSyncStatus('error', res.status === 404 ? 'Gist Not Found' : 'Sync Out');
+                }
+            } catch (e) { setSyncStatus('error', 'Disconnected'); }
+        }
+
+        // ============================
+        // RENDERING
+        // ============================
+        function updateAppUI() {
+            localStorage.setItem('ro_pure_local_expenses', JSON.stringify(expenses));
+            localStorage.setItem('ro_pure_local_maaser', JSON.stringify(maaser));
+            
+            const total = expenses.reduce((sum, exp) => sum + exp.amount, 0);
+            els.totalAmount.textContent = total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            
+            const sortedExpenses = [...expenses].sort((a, b) => b.amount - a.amount);
+            renderMaaser();
+            renderSortedList(sortedExpenses);
+            updateChart(sortedExpenses, total);
+        }
+
+        function renderMaaser() {
+            els.maaserPinned.innerHTML = `
+                <div class="flex items-center justify-between py-3.5 px-2 rounded-xl bg-[#12242c] border border-emerald-900/40 mb-2 cursor-pointer hover:bg-[#12242c]/80 transition maaser-trigger">
+                    <div class="flex items-center gap-3 truncate pr-4 min-w-0 flex-grow pointer-events-none">
+                        <span class="w-2.5 h-2.5 rounded-full flex-shrink-0 mt-1 self-start bg-[#00c805]"></span>
+                        <div class="truncate flex flex-col justify-center">
+                            <span class="font-medium text-sm text-gray-200 truncate flex items-center gap-1.5">
+                                Maaser <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 text-gray-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5 5a2 2 0 012-2h6a2 2 0 012 2v14l-5-3-5 3V5z" clip-rule="evenodd" /></svg>
+                            </span>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-4 flex-shrink-0 ml-2">
+                        <span contenteditable="true" class="maaser-edit-span font-mono text-sm font-semibold text-white px-2 py-0.5 rounded bg-[#172a32] focus:outline-none">$${maaser.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                </div>`;
+        }
+
+        function renderSortedList(sorted) {
+            if (sorted.length === 0) {
+                els.listFallback.classList.remove('hidden');
+                els.expenseList.classList.add('hidden');
+                return;
+            }
+            els.listFallback.classList.add('hidden');
+            els.expenseList.className = "divide-y divide-gray-800";
+
+            els.expenseList.innerHTML = sorted.map((item, idx) => {
+                const color = DYNAMIC_COLORS[idx % DYNAMIC_COLORS.length] || '#4b5563';
+                return `
+                    <div class="expense-row flex items-center justify-between py-3.5 px-2 rounded-xl hover:bg-[#12242c]/40 transition duration-150 cursor-pointer" data-id="${item.id}">
+                        <div class="flex items-center gap-3 truncate pr-4 min-w-0 flex-grow pointer-events-none">
+                            <span class="w-2.5 h-2.5 rounded-full flex-shrink-0 mt-1 self-start" style="background-color: ${color}"></span>
+                            <div class="truncate flex flex-col">
+                                <span class="font-medium text-sm text-gray-200 truncate">${escapeHtml(item.desc)}</span>
+                                <span class="text-xs text-gray-500 italic truncate mt-0.5">${item.note ? escapeHtml(item.note) : 'Click to add a note...'}</span>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-4 flex-shrink-0 ml-2">
+                            <span contenteditable="true" class="expense-edit-span font-mono text-sm font-semibold text-white px-2 py-0.5 rounded bg-[#172a32] focus:outline-none" data-id="${item.id}">$${item.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                        </div>
+                    </div>`;
+            }).join('');
+        }
+
+        function updateChart(sorted, grandTotal) {
+            if (sorted.length === 0) {
+                els.chartFallback.classList.remove('hidden');
+                els.chartCanvas.classList.add('hidden');
+                els.chartLegend.innerHTML = '';
+                if (chartInstance) chartInstance.destroy();
+                return;
+            }
+            els.chartFallback.classList.add('hidden');
+            els.chartCanvas.classList.remove('hidden');
+            
+            const labels = sorted.map(e => e.desc);
+            const dataValues = sorted.map(e => e.amount);
+            const colors = sorted.map((_, index) => DYNAMIC_COLORS[index % DYNAMIC_COLORS.length]);
+
+            els.chartLegend.innerHTML = sorted.map((e, idx) => {
+                const itemPct = grandTotal > 0 ? ((e.amount / grandTotal) * 100).toFixed(0) : 0;
+                return `<div class="flex items-center gap-2 truncate"><span class="w-2 h-2 rounded-full flex-shrink-0" style="background-color: ${colors[idx]}"></span><span class="truncate text-gray-300">${escapeHtml(e.desc)}</span><span class="text-gray-500 font-mono text-[10px] ml-auto">${itemPct}%</span></div>`;
+            }).join('');
+
+            if (chartInstance) {
+                chartInstance.data.labels = labels;
+                chartInstance.data.datasets[0].data = dataValues;
+                chartInstance.data.datasets[0].backgroundColor = colors;
+                chartInstance.update();
+            } else {
+                chartInstance = new Chart(els.chartCanvas.getContext('2d'), {
+                    type: 'pie',
+                    data: { labels, datasets: [{ data: dataValues, backgroundColor: colors, borderWidth: 2, borderColor: '#0e1e24' }] },
+                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+                });
+            }
+        }
+
+        // ============================
+        // EVENT LISTENERS (Delegated)
+        // ============================
+        
+        // Modal Closers
+        document.querySelectorAll('.close-modal-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => toggleModal(e.currentTarget.dataset.target, false));
+        });
+        document.querySelectorAll('[id$="overlay"]').forEach(overlay => {
+            overlay.addEventListener('click', (e) => { if (e.target === overlay) toggleModal(overlay.id, false); });
+        });
+
+        // Global Add Expense
+        document.getElementById('global-fab').addEventListener('click', () => toggleModal('modal-overlay', true));
+        document.getElementById('global-expense-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            expenses.push({
+                id: crypto.randomUUID(), // Replaced Date.now()
+                desc: document.getElementById('expense-desc').value.trim(),
+                amount: parseFloat(document.getElementById('expense-amount').value),
+                note: document.getElementById('expense-note').value.trim()
+            });
+            e.target.reset();
+            await commitChanges();
+            toggleModal('modal-overlay', false);
+        });
+
+        // View/Edit Delegate
+        document.addEventListener('click', (e) => {
+            const row = e.target.closest('.expense-row');
+            if (row && !e.target.classList.contains('expense-edit-span')) {
+                const target = expenses.find(exp => exp.id === row.dataset.id);
+                if (target) {
+                    document.getElementById('edit-expense-id').value = target.id;
+                    document.getElementById('edit-expense-desc').value = target.desc;
+                    document.getElementById('edit-expense-amount').value = target.amount;
+                    document.getElementById('edit-expense-note').value = target.note || '';
+                    toggleModal('view-modal-overlay', true);
+                }
+            }
+            if (e.target.closest('.maaser-trigger') && !e.target.classList.contains('maaser-edit-span')) {
+                document.getElementById('maaser-amount-input').value = maaser.amount;
+                document.getElementById('maaser-delta-input').value = '';
+                els.maaserHistory.innerHTML = (maaser.history || []).sort((a, b) => b.timestamp - a.timestamp).map(h => `
+                    <div class="flex items-center justify-between px-3 py-2 rounded-lg bg-[#172a32]">
+                        <span class="text-gray-400 text-xs">${new Date(h.timestamp).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
+                        <span class="font-mono text-white font-semibold">$${h.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                    </div>`).join('') || '<div class="text-xs text-gray-600 italic">No changes recorded yet.</div>';
+                toggleModal('maaser-modal-overlay', true);
+            }
+        });
+
+        // Edit Amount Inline Event Delegation
+        document.addEventListener('keydown', (e) => {
+            if ((e.target.classList.contains('expense-edit-span') || e.target.classList.contains('maaser-edit-span')) && e.key === 'Enter') {
+                e.preventDefault();
+                e.target.blur();
+            }
+        });
+
+        document.addEventListener('focusout', async (e) => {
+            if (e.target.classList.contains('expense-edit-span')) {
+                const target = expenses.find(exp => exp.id === e.target.dataset.id);
+                let parsed = parseFloat(e.target.textContent.replace(/[$,]/g, '').trim());
+                if (isNaN(parsed) || parsed < 0) parsed = target.amount;
+                if (target.amount !== parsed) {
+                    target.amount = parsed;
+                    await commitChanges();
+                } else { e.target.textContent = '$' + target.amount.toLocaleString('en-US', { minimumFractionDigits: 2 }); }
+            }
+            if (e.target.classList.contains('maaser-edit-span')) {
+                let parsed = parseFloat(e.target.textContent.replace(/[$,]/g, '').trim());
+                if (isNaN(parsed) || parsed < 0) parsed = maaser.amount;
+                if (parsed !== maaser.amount) {
+                    maaser.amount = Math.max(0, calcRound(parsed));
+                    maaser.history = maaser.history || [];
+                    maaser.history.push({ amount: maaser.amount, timestamp: Date.now() });
+                    await commitChanges();
+                } else { e.target.textContent = '$' + maaser.amount.toLocaleString('en-US', { minimumFractionDigits: 2 }); }
+            }
+        });
+
+        // View Modal Actions
+        document.getElementById('view-expense-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const target = expenses.find(exp => exp.id === document.getElementById('edit-expense-id').value);
+            if (target) {
+                target.desc = document.getElementById('edit-expense-desc').value.trim();
+                target.amount = parseFloat(document.getElementById('edit-expense-amount').value);
+                target.note = document.getElementById('edit-expense-note').value.trim();
+                await commitChanges();
+                toggleModal('view-modal-overlay', false);
+            }
+        });
+
+        document.getElementById('delete-view-btn').addEventListener('click', async () => {
+            expenses = expenses.filter(exp => exp.id !== document.getElementById('edit-expense-id').value);
+            await commitChanges();
+            toggleModal('view-modal-overlay', false);
+        });
+
+        // Maaser Form & Buttons
+        document.getElementById('maaser-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const val = parseFloat(document.getElementById('maaser-amount-input').value);
+            if (!isNaN(val) && val >= 0 && val !== maaser.amount) {
+                maaser.amount = calcRound(val);
+                maaser.history = maaser.history || [];
+                maaser.history.push({ amount: maaser.amount, timestamp: Date.now() });
+                await commitChanges();
+                toggleModal('maaser-modal-overlay', false);
+            }
+        });
+
+        const handleMaaserDelta = async (direction) => {
+            const input = document.getElementById('maaser-delta-input');
+            const val = parseFloat(input.value);
+            if (!isNaN(val) && val > 0) {
+                maaser.amount = Math.max(0, calcRound(maaser.amount + (val * direction)));
+                maaser.history = maaser.history || [];
+                maaser.history.push({ amount: maaser.amount, timestamp: Date.now() });
+                await commitChanges();
+                toggleModal('maaser-modal-overlay', false);
+            }
+        };
+        document.getElementById('maaser-add-btn').addEventListener('click', () => handleMaaserDelta(1));
+        document.getElementById('maaser-sub-btn').addEventListener('click', () => handleMaaserDelta(-1));
+
+        // GitHub Settings Actions
+        document.getElementById('sync-badge').addEventListener('click', () => ghSettings.token ? pullFromCloud() : toggleModal('settings-overlay', true));
+        document.getElementById('settings-trigger').addEventListener('click', () => {
+            document.getElementById('gh-token').value = ghSettings.token || '';
+            document.getElementById('gh-gist-id').value = ghSettings.gistId || '';
+            document.getElementById('gh-settings-status').textContent = '';
+            toggleModal('settings-overlay', true);
+        });
+        document.getElementById('copy-gist-id').addEventListener('click', () => navigator.clipboard.writeText(document.getElementById('gh-gist-id').value).catch(()=>{}));
+
+        document.getElementById('gh-connect-btn').addEventListener('click', async () => {
+            const token = document.getElementById('gh-token').value.trim();
+            let gistId = document.getElementById('gh-gist-id').value.trim();
+            const statusEl = document.getElementById('gh-settings-status');
+            
+            if (!token) { statusEl.className = 'text-xs min-h-[1em] text-red-400'; statusEl.textContent = 'Token required.'; return; }
+            statusEl.className = 'text-xs min-h-[1em] text-gray-400'; statusEl.textContent = 'Connecting...';
+            
+            try {
+                if (!gistId) {
+                    const res = await fetch('https://api.github.com/gists', {
+                        method: 'POST',
+                        headers: { 'Accept': 'application/vnd.github+json', 'Authorization': `token ${token}`, 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ description: 'Streamline shared expenses', public: false, files: { [GIST_FILE_NAME]: { content: JSON.stringify({ expenses, maaser }) } } })
+                    });
+                    if (!res.ok) throw new Error();
+                    gistId = (await res.json()).id;
+                    document.getElementById('gh-gist-id').value = gistId;
+                }
+                ghSettings = { token, gistId };
+                localStorage.setItem('streamline_gh_settings', JSON.stringify(ghSettings));
+                await pullFromCloud();
+                statusEl.className = 'text-xs min-h-[1em] text-[#00c805]'; statusEl.textContent = 'Connected!';
+            } catch (e) { statusEl.className = 'text-xs min-h-[1em] text-red-400'; statusEl.textContent = 'Failed to connect.'; }
+        });
+
+        // Local Tab Sync
+        localSyncChannel.onmessage = (event) => {
+            if (!event.data) return;
+            if (Array.isArray(event.data)) expenses = event.data;
+            else { expenses = event.data.expenses || expenses; maaser = event.data.maaser || maaser; }
+            updateAppUI();
+        };
+
+        // Scroll FAB Behavior
+        const fabStack = document.getElementById('fab-stack');
+        let fabScrollLast = 0;
+        document.getElementById('app-scroll-container').addEventListener('scroll', (e) => {
+            const st = e.target.scrollTop;
+            if (st <= 10 || st < fabScrollLast - 4) fabStack.classList.remove('opacity-0', 'pointer-events-none', 'translate-y-4');
+            else if (st > fabScrollLast + 4) fabStack.classList.add('opacity-0', 'pointer-events-none', 'translate-y-4');
+            fabScrollLast = st;
+        }, { passive: true });
+
+        // Smart background syncing (resumes when tab is focused)
+        document.addEventListener("visibilitychange", () => {
+            if (document.visibilityState === "visible") pullFromCloud();
+        });
+
+        // ============================
+        // INITIALIZATION
+        // ============================
+        async function initApp() {
+            updateAppUI();
+            if (ghSettings.token && ghSettings.gistId) {
+                setSyncStatus('syncing', 'Syncing...');
+                await pullFromCloud();
+                syncInterval = setInterval(pullFromCloud, 6000);
+            } else {
+                setSyncStatus('error', 'Not connected');
+            }
+        }
+
+        initApp();
+    </script>
+</body>
+</html>
