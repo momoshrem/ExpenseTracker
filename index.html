@@ -1,0 +1,825 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-[#0e1e24]">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ExpenseTracker</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body class="h-full font-sans antialiased text-gray-200 selection:bg-emerald-500 selection:text-black">
+
+    <div id="app-scroll-container" class="flex h-full flex-col lg:flex-row max-w-7xl mx-auto overflow-y-auto lg:overflow-hidden bg-[#0e1e24]">
+
+        <!-- MAIN ANALYTICS PANEL (Left Side) -->
+        <main id="main-scroll-container" class="w-full lg:flex-1 flex flex-col justify-start p-6 lg:p-8 lg:border-r lg:border-gray-900 lg:overflow-y-auto no-scrollbar">
+            <!-- Header Status Area -->
+            <header class="flex items-center justify-between mb-8">
+                <div>
+                    <h1 class="text-xs uppercase tracking-widest text-gray-500 font-bold">Total Monthly Expenses</h1>
+                    <div class="flex items-baseline gap-1 mt-1 text-white">
+                        <span class="text-2xl font-light text-gray-400">$</span>
+                        <span id="total-amount" class="text-5xl font-semibold tracking-tight">0.00</span>
+                    </div>
+                </div>
+
+                <!-- Sync State Badge -->
+                <div class="flex flex-col items-end gap-2">
+                    <button id="sync-badge" class="flex items-center gap-2 bg-[#172a32] px-3 py-1.5 rounded-full border border-gray-800 hover:border-gray-700 transition">
+                        <span id="sync-dot" class="w-2 h-2 rounded-full bg-yellow-500 animate-pulse"></span>
+                        <span id="sync-text" class="text-xs font-medium text-gray-400 font-mono">Initializing...</span>
+                    </button>
+                    <button id="settings-trigger" class="text-[11px] text-gray-500 hover:text-gray-300 underline underline-offset-2">GitHub sync settings</button>
+                </div>
+            </header>
+
+            <!-- Visualization Node -->
+            <section class="bg-[#12242c] rounded-2xl border border-gray-900 p-6 shadow-xl mb-4">
+                <h2 class="text-sm font-semibold text-gray-400 mb-6 tracking-wide">Expense Wheel</h2>
+                <div class="flex flex-col md:flex-row gap-8 items-center justify-center">
+                    <div class="relative w-40 h-40 sm:w-48 sm:h-48 flex-shrink-0 flex items-center justify-center">
+                        <!-- Fallback when data is empty -->
+                        <div id="chart-fallback" class="absolute inset-0 flex flex-col items-center justify-center text-center p-4 bg-[#172a32] rounded-full border border-dashed border-gray-750">
+                            <span class="text-xs text-gray-500">Awaiting allocations</span>
+                        </div>
+                        <canvas id="expense-chart" class="w-full h-full hidden"></canvas>
+                    </div>
+
+                    <!-- Mini Legend Container -->
+                    <div id="chart-legend" class="flex-1 grid grid-cols-2 gap-x-4 gap-y-2.5 text-xs w-full max-w-sm md:max-w-none">
+                        <!-- Dynamic Content insertion -->
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- ITEMIZATION FEED PANEL (Right Side) -->
+        <aside class="w-full lg:w-[460px] flex flex-col bg-[#0b171c] border-t lg:border-t-0 border-gray-900 lg:h-full">
+            <div id="aside-scroll-container" class="flex-1 lg:overflow-y-auto no-scrollbar p-6 space-y-2">
+                <div id="maaser-pinned-container"></div>
+                <div id="list-fallback" class="py-12 text-center text-gray-600 text-sm hidden">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 mx-auto mb-2 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
+                    No expenses mapped yet.
+                </div>
+                <div id="expense-list-container">
+                    <!-- Javascript injection surface -->
+                </div>
+            </div>
+        </aside>
+    </div>
+
+    <!-- GLOBAL FLOATING ACTION BUTTON (fades away while scrolling the list) -->
+    <div id="fab-stack" class="fixed bottom-6 right-6 z-40 flex flex-col items-center gap-3 transition-all duration-300 ease-out">
+        <button id="global-fab" class="bg-[#00c805] hover:bg-emerald-500 text-black p-4 rounded-full shadow-2xl transition-all duration-150 transform active:scale-95 hover:scale-105 flex items-center justify-center">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4" /></svg>
+        </button>
+    </div>
+
+    <!-- UNIFIED ACTION MODAL SLIDE DRAWER -->
+    <div id="modal-overlay" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 pointer-events-none opacity-0 transition-opacity duration-200 flex items-end sm:items-center sm:justify-center p-0 sm:p-4">
+        <div id="modal-container" class="w-full sm:max-w-md bg-[#12242c] border border-gray-900 rounded-t-3xl sm:rounded-2xl shadow-2xl p-6 transition-transform duration-200 transform translate-y-full sm:translate-y-4">
+            <div class="flex items-center justify-between mb-5">
+                <h3 class="text-base font-semibold text-white">Expense Details</h3>
+                <button id="close-modal-btn" class="text-gray-500 hover:text-white p-1"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg></button>
+            </div>
+
+            <form id="global-expense-form" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-gray-400 mb-1">Description</label>
+                    <input type="text" id="expense-desc" required placeholder="e.g., AWS Cloud Infra, Subscriptions" class="w-full bg-[#172a32] border border-gray-800 rounded-xl px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-emerald-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-400 mb-1">Amount ($)</label>
+                    <input type="number" step="0.01" min="0.01" id="expense-amount" required placeholder="0.00" class="w-full bg-[#172a32] border border-gray-800 rounded-xl px-3 py-2.5 text-sm font-mono text-white placeholder-gray-600 focus:outline-none focus:border-emerald-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-400 mb-1">Internal Note</label>
+                    <input type="text" id="expense-note" placeholder="Optional context..." class="w-full bg-[#172a32] border border-gray-800 rounded-xl px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-emerald-500">
+                </div>
+                <button type="submit" class="w-full bg-[#00c805] hover:bg-emerald-500 text-black font-semibold text-sm py-3 rounded-xl mt-2 transition-colors">
+                    Add Expense
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- VIEW & EDIT EXPENSE DRAWER -->
+    <div id="view-modal-overlay" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 pointer-events-none opacity-0 transition-opacity duration-200 flex items-end sm:items-center sm:justify-center p-0 sm:p-4">
+        <div id="view-modal-container" class="w-full sm:max-w-md bg-[#12242c] border border-gray-900 rounded-t-3xl sm:rounded-2xl shadow-2xl p-6 transition-transform duration-200 transform translate-y-full sm:translate-y-4">
+            <div class="flex items-center justify-between mb-5">
+                <h3 class="text-base font-semibold text-white">Expense Details</h3>
+                <button id="close-view-modal-btn" class="text-gray-500 hover:text-white p-1"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg></button>
+            </div>
+
+            <form id="view-expense-form" class="space-y-4">
+                <input type="hidden" id="edit-expense-id">
+                <div>
+                    <label class="block text-xs font-semibold text-gray-400 mb-1">Description</label>
+                    <input type="text" id="edit-expense-desc" required class="w-full bg-[#172a32] border border-gray-800 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-400 mb-1">Amount ($)</label>
+                    <input type="number" step="0.01" min="0.01" id="edit-expense-amount" required class="w-full bg-[#172a32] border border-gray-800 rounded-xl px-3 py-2.5 text-sm font-mono text-white focus:outline-none focus:border-emerald-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-400 mb-1">Note Details</label>
+                    <textarea id="edit-expense-note" rows="4" placeholder="No note detail added yet..." class="w-full bg-[#172a32] border border-gray-800 rounded-xl px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-emerald-500 resize-none"></textarea>
+                </div>
+                <div class="flex gap-3">
+                    <button id="delete-view-btn" type="button" class="flex-1 bg-red-950/40 hover:bg-red-900/60 border border-red-900 text-red-200 font-semibold text-sm py-3 rounded-xl transition-colors">
+                        Delete Expense
+                    </button>
+                    <button type="submit" class="flex-1 bg-[#00c805] hover:bg-emerald-500 text-black font-semibold text-sm py-3 rounded-xl transition-colors">
+                        Save Changes
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- GITHUB SYNC SETTINGS DRAWER -->
+    <div id="settings-overlay" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 pointer-events-none opacity-0 transition-opacity duration-200 flex items-end sm:items-center sm:justify-center p-0 sm:p-4">
+        <div id="settings-container" class="w-full sm:max-w-md bg-[#12242c] border border-gray-900 rounded-t-3xl sm:rounded-2xl shadow-2xl p-6 transition-transform duration-200 transform translate-y-full sm:translate-y-4">
+            <div class="flex items-center justify-between mb-3">
+                <h3 class="text-base font-semibold text-white">GitHub Sync</h3>
+                <button id="close-settings-btn" class="text-gray-500 hover:text-white p-1"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg></button>
+            </div>
+            <p class="text-xs text-gray-500 mb-4 leading-relaxed">
+                Expenses sync through a private Gist on your own GitHub account — no cloud or third party involved. Create a token at
+                <a href="https://github.com/settings/tokens/new?scopes=gist&description=Streamline" target="_blank" rel="noopener" class="text-[#00c805] hover:underline">github.com/settings/tokens</a>
+                with the <span class="text-gray-300">gist</span> scope, then connect from every device you use.
+            </p>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-gray-400 mb-1">Personal access token</label>
+                    <input type="password" id="gh-token" placeholder="ghp_..." class="w-full bg-[#172a32] border border-gray-800 rounded-xl px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-emerald-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-400 mb-1">Gist ID <span class="text-gray-600 font-normal">(leave blank the first time)</span></label>
+                    <div class="flex gap-2">
+                        <input type="text" id="gh-gist-id" placeholder="auto-filled after first connect" class="flex-1 bg-[#172a32] border border-gray-800 rounded-xl px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-emerald-500">
+                        <button id="copy-gist-id" type="button" class="px-3 text-xs text-gray-400 hover:text-gray-200 bg-[#172a32] border border-gray-800 rounded-xl">Copy</button>
+                    </div>
+                </div>
+                <p id="gh-settings-status" class="text-xs min-h-[1em]"></p>
+                <button id="gh-connect-btn" class="w-full bg-[#00c805] hover:bg-emerald-500 text-black font-semibold text-sm py-3 rounded-xl transition-colors">
+                    Save &amp; Connect
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAASER PINNED DRAWER (amount + full change history) -->
+    <div id="maaser-modal-overlay" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 pointer-events-none opacity-0 transition-opacity duration-200 flex items-end sm:items-center sm:justify-center p-0 sm:p-4">
+        <div id="maaser-modal-container" class="w-full sm:max-w-md max-h-[85vh] flex flex-col bg-[#12242c] border border-gray-900 rounded-t-3xl sm:rounded-2xl shadow-2xl p-6 transition-transform duration-200 transform translate-y-full sm:translate-y-4">
+            <div class="flex items-center justify-between mb-5 flex-shrink-0">
+                <h3 class="text-base font-semibold text-white">Maaser</h3>
+                <button id="close-maaser-modal-btn" class="text-gray-500 hover:text-white p-1"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg></button>
+            </div>
+
+            <div class="mb-5 flex-shrink-0">
+                <label class="block text-xs font-semibold text-gray-400 mb-1">Adjust by</label>
+                <div class="flex gap-2">
+                    <input type="number" step="0.01" min="0" id="maaser-adjust-input" placeholder="0.00" class="flex-1 min-w-0 bg-[#172a32] border border-gray-800 rounded-xl px-3 py-2.5 text-sm font-mono text-white focus:outline-none focus:border-emerald-500">
+                    <button type="button" id="maaser-subtract-btn" class="w-12 flex-shrink-0 rounded-xl bg-red-950/40 hover:bg-red-900/60 border border-red-900 text-red-200 text-xl font-bold transition active:scale-95 flex items-center justify-center">−</button>
+                    <button type="button" id="maaser-add-btn" class="w-12 flex-shrink-0 rounded-xl bg-emerald-950/40 hover:bg-emerald-900/60 border border-emerald-800 text-emerald-300 text-xl font-bold transition active:scale-95 flex items-center justify-center">+</button>
+                </div>
+            </div>
+
+            <form id="maaser-form" class="space-y-4 flex-shrink-0 pt-4 border-t border-gray-800">
+                <div>
+                    <label class="block text-xs font-semibold text-gray-400 mb-1">Set exact amount ($)</label>
+                    <input type="number" step="0.01" min="0" id="maaser-amount-input" required class="w-full bg-[#172a32] border border-gray-800 rounded-xl px-3 py-2.5 text-sm font-mono text-white focus:outline-none focus:border-emerald-500">
+                </div>
+                <button type="submit" class="w-full bg-[#00c805] hover:bg-emerald-500 text-black font-semibold text-sm py-3 rounded-xl transition-colors">
+                    Save Amount
+                </button>
+            </form>
+
+            <div class="mt-6 pt-4 border-t border-gray-800 flex-1 overflow-y-auto no-scrollbar">
+                <h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Change History</h4>
+                <div id="maaser-history-list" class="space-y-2 text-sm"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- APPLICATION SCRIPT -->
+    <script>
+    (function () {
+        'use strict';
+
+        /* =========================================================================
+         * CONFIG & CONSTANTS
+         * ========================================================================= */
+        const GIST_FILE_NAME = 'streamline-data.json';
+        const CHART_COLORS = ['#00c805', '#ff5000', '#ffb700', '#0094ff', '#9d4edd', '#e63946', '#00f5d4', '#ff007f'];
+        const STORAGE_KEYS = {
+            expenses: 'ro_pure_local_expenses',
+            maaser: 'ro_pure_local_maaser',
+            ghSettings: 'streamline_gh_settings',
+        };
+        const ICONS = {
+            edit: '<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>',
+            history: '<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>',
+            bookmark: '<svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 text-gray-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5 5a2 2 0 012-2h6a2 2 0 012 2v14l-5-3-5 3V5z" clip-rule="evenodd" /></svg>',
+        };
+
+        /* =========================================================================
+         * SHARED HELPERS
+         * ========================================================================= */
+        function formatCurrency(n) {
+            return '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+
+        function roundCurrency(n) {
+            return Math.round((n + Number.EPSILON) * 100) / 100;
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+        }
+
+        function parseEditedAmount(element, fallback) {
+            const raw = element.textContent.replace(/[$,]/g, '').trim();
+            const parsed = parseFloat(raw);
+            return (isNaN(parsed) || parsed < 0) ? fallback : parsed;
+        }
+
+        function $(id) { return document.getElementById(id); }
+
+        /* =========================================================================
+         * GENERIC SLIDE-UP DRAWER (used by every modal — add/edit/settings/maaser)
+         * ========================================================================= */
+        const Drawer = {
+            open(overlay, container) {
+                overlay.classList.remove('pointer-events-none');
+                overlay.classList.add('opacity-100');
+                container.classList.remove('translate-y-full', 'sm:translate-y-4');
+                container.classList.add('translate-y-0');
+            },
+            close(overlay, container) {
+                overlay.classList.add('pointer-events-none');
+                overlay.classList.remove('opacity-100');
+                container.classList.remove('translate-y-0');
+                container.classList.add('translate-y-full', 'sm:translate-y-4');
+            },
+            wire(overlay, container, { onOpenBtn, onCloseBtn, onOpen } = {}) {
+                if (onOpenBtn) onOpenBtn.addEventListener('click', () => { if (onOpen) onOpen(); this.open(overlay, container); });
+                if (onCloseBtn) onCloseBtn.addEventListener('click', () => this.close(overlay, container));
+                overlay.addEventListener('click', (e) => { if (e.target === overlay) this.close(overlay, container); });
+            },
+        };
+
+        /* =========================================================================
+         * DOM REFERENCES
+         * ========================================================================= */
+        const dom = {
+            scrollContainers: ['app-scroll-container', 'main-scroll-container', 'aside-scroll-container'].map($),
+
+            totalAmount: $('total-amount'),
+            chartLegend: $('chart-legend'),
+            chartFallback: $('chart-fallback'),
+            chartCanvas: $('expense-chart'),
+            expenseList: $('expense-list-container'),
+            listFallback: $('list-fallback'),
+            maaserPinned: $('maaser-pinned-container'),
+
+            syncDot: $('sync-dot'),
+            syncText: $('sync-text'),
+            syncBadge: $('sync-badge'),
+
+            fabStack: $('fab-stack'),
+            globalFab: $('global-fab'),
+
+            modalOverlay: $('modal-overlay'),
+            modalContainer: $('modal-container'),
+            closeModalBtn: $('close-modal-btn'),
+            addForm: $('global-expense-form'),
+            addDesc: $('expense-desc'),
+            addAmount: $('expense-amount'),
+            addNote: $('expense-note'),
+
+            viewOverlay: $('view-modal-overlay'),
+            viewContainer: $('view-modal-container'),
+            closeViewBtn: $('close-view-modal-btn'),
+            viewForm: $('view-expense-form'),
+            editId: $('edit-expense-id'),
+            editDesc: $('edit-expense-desc'),
+            editAmount: $('edit-expense-amount'),
+            editNote: $('edit-expense-note'),
+            deleteViewBtn: $('delete-view-btn'),
+
+            settingsTrigger: $('settings-trigger'),
+            settingsOverlay: $('settings-overlay'),
+            settingsContainer: $('settings-container'),
+            closeSettingsBtn: $('close-settings-btn'),
+            ghToken: $('gh-token'),
+            ghGistId: $('gh-gist-id'),
+            ghStatus: $('gh-settings-status'),
+            ghConnectBtn: $('gh-connect-btn'),
+            copyGistIdBtn: $('copy-gist-id'),
+
+            maaserOverlay: $('maaser-modal-overlay'),
+            maaserContainer: $('maaser-modal-container'),
+            closeMaaserBtn: $('close-maaser-modal-btn'),
+            maaserForm: $('maaser-form'),
+            maaserAmountInput: $('maaser-amount-input'),
+            maaserAdjustInput: $('maaser-adjust-input'),
+            maaserAddBtn: $('maaser-add-btn'),
+            maaserSubtractBtn: $('maaser-subtract-btn'),
+            maaserHistoryList: $('maaser-history-list'),
+        };
+
+        /* =========================================================================
+         * STORE — single source of truth for app state + localStorage persistence
+         * ========================================================================= */
+        const Store = {
+            expenses: JSON.parse(localStorage.getItem(STORAGE_KEYS.expenses)) || [],
+            maaser: JSON.parse(localStorage.getItem(STORAGE_KEYS.maaser)) || { amount: 0, history: [] },
+            ghSettings: JSON.parse(localStorage.getItem(STORAGE_KEYS.ghSettings)) || { token: '', gistId: '' },
+
+            persist() {
+                localStorage.setItem(STORAGE_KEYS.expenses, JSON.stringify(this.expenses));
+                localStorage.setItem(STORAGE_KEYS.maaser, JSON.stringify(this.maaser));
+            },
+            persistGhSettings() {
+                localStorage.setItem(STORAGE_KEYS.ghSettings, JSON.stringify(this.ghSettings));
+            },
+            total() {
+                return this.expenses.reduce((sum, e) => sum + e.amount, 0);
+            },
+            sortedExpenses() {
+                return [...this.expenses].sort((a, b) => b.amount - a.amount);
+            },
+        };
+
+        const localSyncChannel = new BroadcastChannel('streamline_local_sync');
+        localSyncChannel.onmessage = (event) => {
+            if (!event.data) return;
+            if (Array.isArray(event.data)) {
+                Store.expenses = event.data;
+            } else {
+                if (Array.isArray(event.data.expenses)) Store.expenses = event.data.expenses;
+                if (event.data.maaser) Store.maaser = event.data.maaser;
+            }
+            UI.renderAll();
+        };
+        function broadcastLocalSync() {
+            localSyncChannel.postMessage({ expenses: Store.expenses, maaser: Store.maaser });
+        }
+
+        /* =========================================================================
+         * GITHUB SYNC — a private Gist acts as the shared "cloud"
+         * ========================================================================= */
+        const GitHubSync = {
+            setStatus(state, message) {
+                dom.syncText.textContent = message;
+                dom.syncDot.className = 'w-2 h-2 rounded-full ' + (
+                    state === 'success' ? 'bg-[#00c805] animate-pulse' :
+                    state === 'syncing' ? 'bg-yellow-500 animate-pulse' :
+                    'bg-red-500'
+                );
+            },
+
+            isConnected() {
+                return Boolean(Store.ghSettings.token && Store.ghSettings.gistId);
+            },
+
+            async createGist(token) {
+                const res = await fetch('https://api.github.com/gists', {
+                    method: 'POST',
+                    headers: { 'Accept': 'application/vnd.github+json', 'Authorization': `token ${token}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        description: 'Streamline shared expenses data — do not delete',
+                        public: false,
+                        files: { [GIST_FILE_NAME]: { content: JSON.stringify({ expenses: Store.expenses, maaser: Store.maaser }, null, 2) } },
+                    }),
+                });
+                if (!res.ok) throw new Error(`GitHub error ${res.status}`);
+                const data = await res.json();
+                return data.id;
+            },
+
+            async push() {
+                if (!this.isConnected()) { this.setStatus('error', 'Not connected'); return; }
+                this.setStatus('syncing', 'Updating GitHub...');
+                try {
+                    const res = await fetch(`https://api.github.com/gists/${Store.ghSettings.gistId}`, {
+                        method: 'PATCH',
+                        headers: {
+                            'Accept': 'application/vnd.github+json',
+                            'Authorization': `token ${Store.ghSettings.token}`,
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ files: { [GIST_FILE_NAME]: { content: JSON.stringify({ expenses: Store.expenses, maaser: Store.maaser }, null, 2) } } }),
+                    });
+                    this.setStatus(res.ok ? 'success' : 'error', res.ok ? 'Live Synced' : 'Sync Failed');
+                } catch (e) {
+                    this.setStatus('error', 'Network Error');
+                }
+            },
+
+            async pull() {
+                if (!this.isConnected()) { this.setStatus('error', 'Not connected'); return; }
+                try {
+                    const res = await fetch(`https://api.github.com/gists/${Store.ghSettings.gistId}`, {
+                        headers: { 'Accept': 'application/vnd.github+json', 'Authorization': `token ${Store.ghSettings.token}` },
+                    });
+                    if (!res.ok) {
+                        this.setStatus('error', res.status === 404 ? 'Gist Not Found' : 'Sync Out');
+                        return;
+                    }
+                    const data = await res.json();
+                    const file = data.files && data.files[GIST_FILE_NAME];
+                    if (!file) { this.setStatus('error', 'Data Missing'); return; }
+
+                    const content = file.truncated ? await (await fetch(file.raw_url)).text() : file.content;
+                    const cloudData = JSON.parse(content || '[]');
+
+                    const remoteExpenses = Array.isArray(cloudData) ? cloudData : (Array.isArray(cloudData.expenses) ? cloudData.expenses : []);
+                    const remoteMaaser = Array.isArray(cloudData) ? Store.maaser :
+                        (cloudData.maaser && typeof cloudData.maaser === 'object' ? cloudData.maaser : { amount: 0, history: [] });
+
+                    const changed = JSON.stringify(Store.expenses) !== JSON.stringify(remoteExpenses) ||
+                        JSON.stringify(Store.maaser) !== JSON.stringify(remoteMaaser);
+                    if (changed) {
+                        Store.expenses = remoteExpenses;
+                        Store.maaser = remoteMaaser;
+                        UI.renderAll();
+                        broadcastLocalSync();
+                    }
+                    this.setStatus('success', 'Live Synced');
+                } catch (e) {
+                    console.error('Pull failure', e);
+                    this.setStatus('error', 'Disconnected');
+                }
+            },
+
+            async syncAfterChange() {
+                Store.persist();
+                broadcastLocalSync();
+                await this.push();
+            },
+        };
+
+        /* =========================================================================
+         * RENDERING
+         * ========================================================================= */
+        let chartInstance = null;
+
+        function renderRow({ colorStyle, title, subtitle, amount, onRowClick, onAmountEdit, onIconClick, iconSvg, extraRowClass }) {
+            return `
+                <div class="flex items-center justify-between py-3.5 px-2 rounded-xl ${extraRowClass} cursor-pointer transition duration-150" onclick="${onRowClick}">
+                    <div class="flex items-center gap-3 truncate pr-4 min-w-0 flex-grow">
+                        <span class="w-2.5 h-2.5 rounded-full flex-shrink-0 mt-1 self-start" style="${colorStyle}"></span>
+                        <div class="truncate flex flex-col ${subtitle === null ? 'justify-center' : ''}">
+                            <span class="font-medium text-sm text-gray-200 truncate flex items-center gap-1.5">${title}</span>
+                            ${subtitle !== null ? `<span class="text-xs text-gray-500 italic truncate mt-0.5">${subtitle}</span>` : ''}
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-4 flex-shrink-0 ml-2" onclick="event.stopPropagation()">
+                        <span contenteditable="true" onblur="${onAmountEdit}" onkeydown="if(event.key === 'Enter') { event.preventDefault(); this.blur(); }" class="font-mono text-sm font-semibold text-white px-2 py-0.5 rounded bg-[#172a32] focus:outline-none">${formatCurrency(amount)}</span>
+                        <button onclick="${onIconClick}" class="text-gray-500 hover:text-emerald-400 p-1">${iconSvg}</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        const UI = {
+            renderAll() {
+                Store.persist();
+                dom.totalAmount.textContent = Store.total().toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                this.renderMaaser();
+                this.renderExpenseList();
+                this.renderChart();
+            },
+
+            renderMaaser() {
+                dom.maaserPinned.innerHTML = renderRow({
+                    colorStyle: 'background-color:#00c805',
+                    title: `Maaser ${ICONS.bookmark}`,
+                    subtitle: null,
+                    amount: Store.maaser.amount,
+                    onRowClick: 'openMaaserModal()',
+                    onAmountEdit: 'handleMaaserAmountEdit(this)',
+                    onIconClick: 'openMaaserModal()',
+                    iconSvg: ICONS.history,
+                    extraRowClass: 'bg-[#12242c] border border-emerald-900/40 mb-2 hover:bg-[#12242c]/80',
+                });
+            },
+
+            renderExpenseList() {
+                if (Store.expenses.length === 0) {
+                    dom.listFallback.classList.remove('hidden');
+                    dom.expenseList.classList.add('hidden');
+                    return;
+                }
+                dom.listFallback.classList.add('hidden');
+                dom.expenseList.className = 'divide-y divide-gray-800';
+                dom.expenseList.innerHTML = Store.sortedExpenses().map((item, idx) => renderRow({
+                    colorStyle: `background-color:${CHART_COLORS[idx % CHART_COLORS.length]}`,
+                    title: escapeHtml(item.desc),
+                    subtitle: item.note ? escapeHtml(item.note) : 'Click to add a note...',
+                    amount: item.amount,
+                    onRowClick: `openViewModal(${item.id})`,
+                    onAmountEdit: `handleAmountEdit(this, ${item.id})`,
+                    onIconClick: `openViewModal(${item.id})`,
+                    iconSvg: ICONS.edit,
+                    extraRowClass: 'hover:bg-[#12242c]/40',
+                })).join('');
+            },
+
+            renderChart() {
+                const sorted = Store.sortedExpenses();
+                const total = Store.total();
+
+                if (sorted.length === 0) {
+                    dom.chartFallback.classList.remove('hidden');
+                    dom.chartCanvas.classList.add('hidden');
+                    dom.chartLegend.innerHTML = '';
+                    if (chartInstance) chartInstance.destroy();
+                    chartInstance = null;
+                    return;
+                }
+                dom.chartFallback.classList.add('hidden');
+                dom.chartCanvas.classList.remove('hidden');
+
+                const labels = sorted.map(e => e.desc);
+                const dataValues = sorted.map(e => e.amount);
+                const colors = sorted.map((_, i) => CHART_COLORS[i % CHART_COLORS.length]);
+
+                dom.chartLegend.innerHTML = sorted.map((e, idx) => {
+                    const pct = total > 0 ? ((e.amount / total) * 100).toFixed(0) : 0;
+                    return `<div class="flex items-center gap-2 truncate"><span class="w-2 h-2 rounded-full flex-shrink-0" style="background-color: ${colors[idx]}"></span><span class="truncate text-gray-300">${escapeHtml(e.desc)}</span><span class="text-gray-500 font-mono text-[10px] ml-auto">${pct}%</span></div>`;
+                }).join('');
+
+                if (chartInstance) {
+                    chartInstance.data.labels = labels;
+                    chartInstance.data.datasets[0].data = dataValues;
+                    chartInstance.data.datasets[0].backgroundColor = colors;
+                    chartInstance.update();
+                } else {
+                    chartInstance = new Chart(dom.chartCanvas.getContext('2d'), {
+                        type: 'pie',
+                        data: { labels, datasets: [{ data: dataValues, backgroundColor: colors, borderWidth: 2, borderColor: '#0e1e24' }] },
+                        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } },
+                    });
+                }
+            },
+
+            renderMaaserHistory() {
+                const history = Store.maaser.history || [];
+                if (history.length === 0) {
+                    dom.maaserHistoryList.innerHTML = '<div class="text-xs text-gray-600 italic">No changes recorded yet.</div>';
+                    return;
+                }
+                dom.maaserHistoryList.innerHTML = [...history].sort((a, b) => b.timestamp - a.timestamp).map(h => `
+                    <div class="flex items-center justify-between px-3 py-2 rounded-lg bg-[#172a32]">
+                        <span class="text-gray-400 text-xs">${new Date(h.timestamp).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
+                        <span class="font-mono text-white font-semibold">${formatCurrency(h.amount)}</span>
+                    </div>
+                `).join('');
+            },
+
+            setGhStatus(text, colorClass) {
+                dom.ghStatus.textContent = text;
+                dom.ghStatus.className = 'text-xs min-h-[1em]' + (colorClass ? ' ' + colorClass : '');
+            },
+        };
+
+        /* =========================================================================
+         * EXPENSES — CRUD
+         * ========================================================================= */
+        const Expenses = {
+            add(desc, amount, note) {
+                Store.expenses.push({ id: Date.now(), desc, amount, note });
+                UI.renderAll();
+                GitHubSync.syncAfterChange();
+            },
+            update(id, desc, amount, note) {
+                const target = Store.expenses.find(e => e.id === id);
+                if (!target) return;
+                target.desc = desc;
+                target.amount = amount;
+                target.note = note;
+                UI.renderAll();
+                GitHubSync.syncAfterChange();
+            },
+            delete(id) {
+                Store.expenses = Store.expenses.filter(e => e.id !== id);
+                UI.renderAll();
+                GitHubSync.syncAfterChange();
+            },
+            setAmount(id, amount) {
+                const target = Store.expenses.find(e => e.id === id);
+                if (!target) return;
+                target.amount = amount;
+                UI.renderAll();
+                GitHubSync.syncAfterChange();
+            },
+        };
+
+        /* =========================================================================
+         * MAASER — pinned entry, excluded from total/wheel, tracks full history,
+         * supports setting an exact amount OR nudging it with +/-
+         * ========================================================================= */
+        const Maaser = {
+            async recordChange(newAmount) {
+                Store.maaser.amount = newAmount;
+                Store.maaser.history = Store.maaser.history || [];
+                Store.maaser.history.push({ amount: newAmount, timestamp: Date.now() });
+                UI.renderAll();
+                UI.renderMaaserHistory();
+                await GitHubSync.syncAfterChange();
+            },
+            async setExact(amount) {
+                if (amount !== Store.maaser.amount) await this.recordChange(amount);
+            },
+            async adjust(sign) {
+                const delta = parseFloat(dom.maaserAdjustInput.value);
+                if (isNaN(delta) || delta <= 0) return;
+                const next = Math.max(0, roundCurrency(Store.maaser.amount + sign * delta));
+                await this.recordChange(next);
+                dom.maaserAdjustInput.value = '';
+                dom.maaserAmountInput.value = Store.maaser.amount;
+            },
+        };
+        /* =========================================================================
+         * WINDOW-EXPOSED HANDLERS
+         * Rows are injected via innerHTML (see renderRow), so their inline
+         * onclick/onblur attributes need functions reachable on window.
+         * ========================================================================= */
+        window.openViewModal = function (id) {
+            const target = Store.expenses.find(e => e.id === id);
+            if (!target) return;
+            dom.editId.value = target.id;
+            dom.editDesc.value = target.desc;
+            dom.editAmount.value = target.amount;
+            dom.editNote.value = target.note || '';
+            Drawer.open(dom.viewOverlay, dom.viewContainer);
+        };
+
+        window.handleAmountEdit = function (element, id) {
+            const target = Store.expenses.find(e => e.id === id);
+            if (!target) return;
+            const parsed = parseEditedAmount(element, target.amount);
+            if (parsed !== target.amount) {
+                Expenses.setAmount(id, parsed);
+            } else {
+                element.textContent = formatCurrency(target.amount);
+            }
+        };
+
+        window.deleteExpense = function (id) { Expenses.delete(id); };
+
+        window.openMaaserModal = function () {
+            dom.maaserAmountInput.value = Store.maaser.amount;
+            UI.renderMaaserHistory();
+            Drawer.open(dom.maaserOverlay, dom.maaserContainer);
+        };
+
+        window.handleMaaserAmountEdit = function (element) {
+            const parsed = parseEditedAmount(element, Store.maaser.amount);
+            if (parsed !== Store.maaser.amount) {
+                Maaser.setExact(parsed);
+            } else {
+                element.textContent = formatCurrency(Store.maaser.amount);
+            }
+        };
+
+        /* =========================================================================
+         * EVENT BINDINGS
+         * ========================================================================= */
+        function bindDrawers() {
+            Drawer.wire(dom.modalOverlay, dom.modalContainer, { onOpenBtn: dom.globalFab, onCloseBtn: dom.closeModalBtn });
+            Drawer.wire(dom.viewOverlay, dom.viewContainer, { onCloseBtn: dom.closeViewBtn });
+            Drawer.wire(dom.settingsOverlay, dom.settingsContainer, {
+                onOpenBtn: dom.settingsTrigger,
+                onCloseBtn: dom.closeSettingsBtn,
+                onOpen: openSettingsModal,
+            });
+            Drawer.wire(dom.maaserOverlay, dom.maaserContainer, { onCloseBtn: dom.closeMaaserBtn });
+        }
+
+        function openSettingsModal() {
+            dom.ghToken.value = Store.ghSettings.token || '';
+            dom.ghGistId.value = Store.ghSettings.gistId || '';
+            UI.setGhStatus('');
+        }
+
+        function bindSyncBadge() {
+            dom.syncBadge.addEventListener('click', () => {
+                if (GitHubSync.isConnected()) GitHubSync.pull();
+                else { openSettingsModal(); Drawer.open(dom.settingsOverlay, dom.settingsContainer); }
+            });
+            dom.copyGistIdBtn.addEventListener('click', () => {
+                if (!dom.ghGistId.value) return;
+                navigator.clipboard.writeText(dom.ghGistId.value).catch(() => {});
+            });
+            dom.ghConnectBtn.addEventListener('click', async () => {
+                const token = dom.ghToken.value.trim();
+                let gistId = dom.ghGistId.value.trim();
+                if (!token) { UI.setGhStatus('A personal access token is required.', 'text-red-400'); return; }
+                UI.setGhStatus('Connecting...', 'text-gray-400');
+                try {
+                    if (!gistId) {
+                        gistId = await GitHubSync.createGist(token);
+                        dom.ghGistId.value = gistId;
+                    }
+                    Store.ghSettings = { token, gistId };
+                    Store.persistGhSettings();
+                    await GitHubSync.pull();
+                    UI.setGhStatus('Connected. Copy the Gist ID above into every other device.', 'text-[#00c805]');
+                } catch (e) {
+                    UI.setGhStatus(e.message || 'Could not connect.', 'text-red-400');
+                }
+            });
+        }
+
+        function bindExpenseForms() {
+            dom.addForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const desc = dom.addDesc.value.trim();
+                const amount = parseFloat(dom.addAmount.value);
+                const note = dom.addNote.value.trim();
+                dom.addForm.reset();
+                Expenses.add(desc, amount, note);
+                Drawer.close(dom.modalOverlay, dom.modalContainer);
+            });
+
+            dom.viewForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const id = parseInt(dom.editId.value);
+                const desc = dom.editDesc.value.trim();
+                const amount = parseFloat(dom.editAmount.value);
+                const note = dom.editNote.value.trim();
+                if (!desc || isNaN(amount) || amount <= 0) return;
+                Expenses.update(id, desc, amount, note);
+                Drawer.close(dom.viewOverlay, dom.viewContainer);
+            });
+
+            dom.deleteViewBtn.addEventListener('click', () => {
+                const id = parseInt(dom.editId.value);
+                Expenses.delete(id);
+                Drawer.close(dom.viewOverlay, dom.viewContainer);
+            });
+        }
+
+        function bindMaaserForm() {
+            dom.maaserForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const val = parseFloat(dom.maaserAmountInput.value);
+                if (isNaN(val) || val < 0) return;
+                await Maaser.setExact(val);
+            });
+            dom.maaserAddBtn.addEventListener('click', () => Maaser.adjust(1));
+            dom.maaserSubtractBtn.addEventListener('click', () => Maaser.adjust(-1));
+        }
+
+        function bindFabFade() {
+            const lastScroll = new WeakMap();
+            function handleScroll(container) {
+                const top = container.scrollTop;
+                const last = lastScroll.get(container) || 0;
+                if (top <= 10 || top < last - 4) {
+                    dom.fabStack.classList.remove('opacity-0', 'pointer-events-none', 'translate-y-4');
+                } else if (top > last + 4) {
+                    dom.fabStack.classList.add('opacity-0', 'pointer-events-none', 'translate-y-4');
+                }
+                lastScroll.set(container, top);
+            }
+            dom.scrollContainers.forEach(c => c && c.addEventListener('scroll', () => handleScroll(c), { passive: true }));
+        }
+
+        /* =========================================================================
+         * INIT
+         * ========================================================================= */
+        async function init() {
+            bindDrawers();
+            bindSyncBadge();
+            bindExpenseForms();
+            bindMaaserForm();
+            bindFabFade();
+
+            if (GitHubSync.isConnected()) {
+                GitHubSync.setStatus('syncing', 'Syncing...');
+                await GitHubSync.pull();
+            } else {
+                GitHubSync.setStatus('error', 'Not connected');
+            }
+            UI.renderAll();
+            setInterval(() => GitHubSync.pull(), 6000);
+        }
+
+        init();
+    })();
+    </script>
+</body>
+</html>
