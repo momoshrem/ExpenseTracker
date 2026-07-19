@@ -73,7 +73,7 @@
         </aside>
     </div>
 
-    <!-- GLOBAL FLOATING ACTION BUTTON (fades away while scrolling the list) -->
+    <!-- GLOBAL FLOATING ACTION BUTTON -->
     <div id="fab-stack" class="fixed bottom-6 right-6 z-40 flex flex-col items-center gap-3 transition-all duration-300 ease-out">
         <button id="global-fab" class="bg-[#00c805] hover:bg-emerald-500 text-black p-4 rounded-full shadow-2xl transition-all duration-150 transform active:scale-95 hover:scale-105 flex items-center justify-center">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4" /></svg>
@@ -483,7 +483,7 @@
                 dom.expenseList.innerHTML = Store.sortedExpenses().map((item, idx) => renderRow({
                     colorStyle: `background-color:${CHART_COLORS[idx % CHART_COLORS.length]}`,
                     title: escapeHtml(item.desc),
-                    subtitle: item.note ? escapeHtml(item.note) : 'Click to add a note...',
+                    subtitle: item.note ? escapeHtml(item.note) : null,
                     amount: item.amount,
                     isMaaser: false,
                     id: item.id,
