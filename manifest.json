@@ -1,6 +1,6 @@
 {
-  "name": "Streamline Expenses",
-  "short_name": "Streamline",
+  "name": "ExpenseTracker",
+  "short_name": "ExpenseTracker",
   "description": "Personal expense tracker synced through your own GitHub Gist.",
   "start_url": "./index.html",
   "scope": "./",
